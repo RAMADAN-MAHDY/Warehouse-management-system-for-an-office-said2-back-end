@@ -7,11 +7,16 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
     trim: true,
+    minlength: 3,
+    maxlength: 30
   },
   password: {
-    type: String,
-    required: true,
-  },
+  type: String,
+  required: true,
+  select: false,
+  minlength: 6,
+  maxlength: 120
+},
   role: {
     type: String,
     enum: ['admin', 'editor', 'viewer'],

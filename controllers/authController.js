@@ -27,7 +27,27 @@ exports.registerUser = async (req, res) => {
 exports.loginUser = async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = await User.findOne({ username });
+
+    if (!username || !password) {
+      return res.status(400).json({ status: false, message: 'Please provide username and password', data: null });
+    }
+        // 1️⃣ تحقق من النوع
+    if (typeof username !== "string" || typeof password !== "string") {
+      return res.status(400).json({ status: false, message: "Invalid credentials" });
+    }
+    // 2️⃣ تنظيف البيانات
+    username = username.trim().toLowerCase();
+    password = password.trim();
+    // 3️⃣ تحقق من الطول
+    if (username.length < 3 || username.length > 30) {
+      return res.status(400).json({ status: false, message: "Invalid credentials" });
+    }
+    // 4️⃣ تحقق من كلمة المرور
+    if (password.length < 6 || password.length > 120) {
+      return res.status(400).json({ status: false, message: "Invalid credentials" });
+    }
+
+    const user = await User.findOne({ username }).select("+password");
     if (!user) {
       return res.status(400).json({ status: false, message: 'Invalid credentials user', data: null });
     }
