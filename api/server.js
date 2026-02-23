@@ -1,5 +1,4 @@
 const express = require('express');
-const serverless = require('serverless-http');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const connectDB = require('../config/db');
@@ -8,10 +7,10 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const dotenv = require('dotenv');
 
-dotenv.config({ path: './.env' });
-
-// اتصال بقاعدة البيانات
-connectDB();
+// Load environment variables only in development
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config({ path: './.env' });
+}
 
 const app = express();
 
@@ -19,6 +18,22 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Middleware to ensure DB connection
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        console.error('Database Connection Error:', err.message);
+        // Don't hang, return error if DB fails
+        if (req.path === '/api/health') return next(); // Let health check handle it
+        res.status(503).json({
+            status: false,
+            message: 'Database connection failed. Please check environment variables.'
+        });
+    }
+});
 
 // جلسات المستخدمين
 app.use(session({
@@ -38,10 +53,19 @@ app.use(session({
 
 // إعداد EJS و static
 app.set('view engine', 'ejs');
-// المسارات يجب أن تكون نسبية لـ __dirname بشكل صحيح في بيئة Vercel
 app.set('views', path.join(__dirname, '../views'));
 app.use(express.static(path.join(__dirname, '../public')));
 app.set('trust proxy', 1);
+
+// مسار فحص الصحة (Health Check)
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        environment: process.env.NODE_ENV || 'development',
+        db_connected: !!process.env.MONGO_URI,
+        timestamp: new Date().toISOString()
+    });
+});
 
 // المسارات
 app.use('/', require('../routes/webRoutes'));
@@ -57,9 +81,8 @@ app.use((err, req, res, next) => {
     res.status(500).json({ status: false, message: 'Internal Server Error' });
 });
 
-// ✅ التصدير بالطريقة الصحيحة لـ Vercel
+// ✅ Vercel handles the express app directly
 module.exports = app;
-module.exports.handler = serverless(app);
 
 // ✅ إضافة مستمع في وضع التطوير فقط
 if (process.env.NODE_ENV !== 'production') {
