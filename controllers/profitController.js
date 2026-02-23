@@ -5,27 +5,37 @@ const Purchase = require('../models/Purchase');
 
 exports.getProfitSummary = async (req, res) => {
     try {
-        const purchases = await Purchase.find().sort({ date: -1 }).limit(100);
+        const cid = req.customerId;
+        const purchases = await Purchase.find({ customerId: cid }).sort({ date: -1 }).limit(100);
         const totalPurchasesAgg = await Purchase.aggregate([
+            { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: "$amount" } } }
         ]);
 
         const totalSales = await SaleInvoice.aggregate([
+            { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: "$total" } } }
         ]);
 
-        const expenses = await Expense.find().sort({ date: -1 });
+        const totalCOGS = await SaleInvoice.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+        ]);
+
+        const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 });
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
-        const netProfit = (totalSales[0]?.total || 0) - (totalPurchasesAgg[0]?.total || 0) - totalExpenses;
+        const netProfit = (totalSales[0]?.total || 0) - (totalCOGS[0]?.total || 0) - totalExpenses;
 
         res.render('profit', {
             purchases,
-            totalPurchases: totalPurchasesAgg[0]?.total || 0,
+            totalPurchases: totalPurchasesAgg[0]?.total || 0, // Keep for display if needed, but not for netProfit
             totalSales: totalSales[0]?.total || 0,
+            totalCOGS: totalCOGS[0]?.total || 0,
             netProfit,
             expenses,
-            totalExpenses
+            totalExpenses,
+            token: req.session.token // إضافة الرمز المميز هنا
         });
     } catch (error) {
         console.error(error);
@@ -41,6 +51,7 @@ exports.addPurchaseAdjustment = async (req, res) => {
             return res.status(400).send('قيمة المبلغ غير صالحة');
         }
         await Purchase.create({
+            customerId: req.customerId,
             description: reason || 'تعديل يدوي لإجمالي المشتريات',
             amount: val,
             type: 'adjustment',
@@ -61,6 +72,7 @@ exports.addPurchaseAdjustmentApi = async (req, res) => {
             return res.status(400).json({ status: false, message: 'قيمة المبلغ غير صالحة' });
         }
         const doc = await Purchase.create({
+            customerId: req.customerId,
             description: reason || 'تعديل يدوي لإجمالي المشتريات',
             amount: val,
             type: 'adjustment',
@@ -75,20 +87,34 @@ exports.addPurchaseAdjustmentApi = async (req, res) => {
 
 exports.getProfitSummaryJson = async (req, res) => {
     try {
-        const purchases = await Purchase.find().sort({ date: -1 }).limit(100);
+        const cid = req.customerId;
+        const purchases = await Purchase.find({ customerId: cid }).sort({ date: -1 }).limit(100);
         const totalPurchasesAgg = await Purchase.aggregate([
+            { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: "$amount" } } }
         ]);
-        const totalSales = await SaleInvoice.aggregate([{ $group: { _id: null, total: { $sum: "$total" } } }]);
-        const expenses = await Expense.find().sort({ date: -1 });
+        const totalSales = await SaleInvoice.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: "$total" } } }
+        ]);
+
+        const totalCOGS = await SaleInvoice.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+        ]);
+
+        const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 });
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-        const netProfit = (totalSales[0]?.total || 0) - (totalPurchasesAgg[0]?.total || 0) - totalExpenses;
+
+        const netProfit = (totalSales[0]?.total || 0) - (totalCOGS[0]?.total || 0) - totalExpenses;
         res.json({
             status: true,
             data: {
+                customerId: cid,
                 purchases,
                 totalPurchases: totalPurchasesAgg[0]?.total || 0,
                 totalSales: totalSales[0]?.total || 0,
+                totalCOGS: totalCOGS[0]?.total || 0,
                 totalExpenses,
                 netProfit
             }

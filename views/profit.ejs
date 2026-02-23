@@ -3,8 +3,8 @@
   <h2 class="text-3xl font-bold mb-6 text-center text-white">المشتريات والمبيعات وصافي الربح</h2>
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <div class="glass p-6 rounded-lg shadow-lg text-center">
-      <h3 class="text-lg font-bold mb-2 text-gray-300">إجمالي المشتريات</h3>
-      <p class="text-3xl font-bold text-green-400"><%= totalPurchases.toFixed(2) %> ج.م</p>
+      <h3 class="text-lg font-bold mb-2 text-gray-300">إجمالي تكلفة البضاعة المباعة (COGS)</h3>
+      <p class="text-3xl font-bold text-green-400"><%= totalCOGS.toFixed(2) %> ج.م</p>
     </div>
     <div class="glass p-6 rounded-lg shadow-lg text-center">
       <h3 class="text-lg font-bold mb-2 text-gray-300">إجمالي المبيعات</h3>
@@ -20,6 +20,11 @@
     </div>
   </div>
 
+  <div class="glass rounded-lg shadow-lg mb-10 sm:w-96 h-64 mx-auto">
+    <h3 class="text-sm font-bold mb-1 text-white text-center">ملخص الأرباح</h3>
+    <canvas id="profitChart" class="w-full"></canvas>
+  </div>
+
   <div class="glass p-1 lg:p-6 rounded-lg shadow-lg mb-8">
     <h3 class="text-2xl font-bold mb-4 text-white">المشتريات</h3>
     <div class="overflow-x-auto">
@@ -30,6 +35,8 @@
             <th class="p-3 text-right">الوصف</th>
             <th class="p-3 text-right">النوع</th>
             <th class="p-3 text-right">المبلغ</th>
+            <th class="p-3 text-right">حذف</th>
+
           </tr>
         </thead>
         <tbody>
@@ -39,6 +46,9 @@
             <td class="p-3"><%= p.description %></td>
             <td class="p-3"><%= p.type === 'adjustment' ? 'تعديل' : 'شراء' %></td>
             <td class="p-3 text-green-400 font-semibold"><%= Number(p.amount).toFixed(2) %> ج.م</td>
+            <td class="p-3">
+              <button type="button" onclick=" deletePurchase('<%= p._id %>')" class="text-red-400 hover:text-red-600 font-semibold">حذف</button>
+            </td>
           </tr>
           <% }) %>
         </tbody>
@@ -64,6 +74,7 @@
             <td class="p-3"><%= expense.date.toISOString().slice(0,10) %></td>
             <td class="p-3"><%= expense.description %></td>
             <td class="p-3 text-red-400 font-semibold"><%= expense.amount.toFixed(2) %> ج.م</td>
+            
           </tr>
           <% }) %>
         </tbody>
@@ -71,4 +82,98 @@
     </div>
   </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const token = '<%= token %>'; // الحصول على الرمز المميز من الخادم
+
+  async function deletePurchase(id) {
+     const ok = await Swal.fire({ title:'تأكيد', text:'هل تريد حذف هذا القيد؟ سيتم حفظ نسخة احتياطية.', icon:'warning', showCancelButton:true, confirmButtonText:'حذف', cancelButtonText:'إلغاء' });
+
+if(ok.isConfirmed){
+  try {
+      const response = await fetch(`/api/purchases/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.status) {
+        Swal.fire('تم الحذف','تم حذف القيد وحفظ نسخة احتياطية.','success'); 
+        window.location.reload(); // إعادة تحميل الصفحة لتحديث القائمة
+      } else {
+        Swal.fire('فشل حذف الشراء: ' + (result.message || 'خطأ غير معروف'));
+      }
+    } catch (error) {
+      console.error('خطأ في حذف الشراء:', error);
+      Swal.fire('خطأ', data.message || 'تعذر الحذف', 'error')
+    }
+}
+  
+  }
+
+  const ctx = document.getElementById('profitChart').getContext('2d');
+  const profitChart = new Chart(ctx, {
+    type: 'bar', // يمكنك تغيير النوع إلى 'line', 'pie', 'doughnut', إلخ.
+    data: {
+      labels: ['إجمالي تكلفة البضاعة المباعة (COGS)', 'إجمالي المبيعات', 'إجمالي المصروفات', 'صافي الربح'],
+      datasets: [{
+        label: 'المبالغ',
+        data: [
+          <%= totalCOGS %>,
+          <%= totalSales %>,
+          <%= totalExpenses %>,
+          <%= netProfit %>
+        ],
+        backgroundColor: [
+          'rgba(75, 192, 192, 0.6)', // مشتريات (أخضر مائل للزرقة)
+          'rgba(54, 162, 235, 0.6)', // مبيعات (أزرق)
+          'rgba(255, 159, 64, 0.6)', // مصروفات (برتقالي)
+          'rgba(255, 99, 132, 0.6)'  // صافي الربح (أحمر)
+        ],
+        borderColor: [
+          'rgba(75, 192, 192, 1)',
+          'rgba(54, 162, 235, 1)',
+          'rgba(255, 159, 64, 1)',
+          'rgba(255, 99, 132, 1)'
+        ],
+        borderWidth: 1,
+        barPercentage: 0.2 // لتقليل عرض الأعمدة
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: 'white' // لون الأرقام على المحور Y
+          },
+          suggestedMax: 90000, // قيمة قصوى مقترحة للمحور Y لجعل الأعمدة أطول
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)' // لون خطوط الشبكة للمحور Y
+          }
+        },
+        x: {
+          ticks: {
+            color: 'white' // لون التسميات على المحور X
+          },
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)' // لون خطوط الشبكة للمحور X
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: 'white' // لون تسميات الأسطورة
+          }
+        }
+      }
+    }
+  });
+</script>
 <%- include('partials/footer') %>

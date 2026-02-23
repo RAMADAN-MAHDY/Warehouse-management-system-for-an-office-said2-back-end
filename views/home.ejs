@@ -1,0 +1,93 @@
+<%- include('partials/header') %>
+
+<div class="container mx-auto p-4 lg:p-8 text-white">
+  <div class="glass p-6 rounded-lg shadow-lg mb-8 text-center">
+    <h1 class="text-4xl font-bold mb-4">أهلاً بيك في نظام إدارة المخازن!</h1>
+    <p class="text-lg mb-6">النظام ده هيساعدك تدير كل حاجة تخص مخزنك بسهولة وفعالية. سواء كنت بتشتري بضاعة، بتبيع منتجات، بتسجل مصاريفك، أو عايز تعرف أرباحك، كل ده هتلاقيه هنا.</p>
+    <p class="text-lg">يلا بينا نتعرف على أقسام النظام وإزاي تستخدمه.</p>
+  </div>
+
+
+  <!-- قسم المخزون -->
+  <div class="glass p-6 rounded-lg shadow-lg mb-8">
+    <h2 class="text-3xl font-bold mb-4 text-green-400">1. المخزون (Inventory)</h2>
+    <p class="mb-4">هنا بتسجل كل البضاعة اللي بتشتريها لمخزنك. مهم جداً تسجل كل تفاصيل المشتريات عشان تعرف إيه اللي دخل المخزن وإيه تكلفتك.</p>
+    <p class="mb-4">
+      <span class="font-semibold">إزاي تستخدمها:</span>
+      <ul class="list-disc list-inside ml-4">
+        <li>اضغط على "إضافة قطعة جديدة".</li>
+        <li>دخل تفاصيل المنتج زي الاسم، الكمية، السعر، والمورد.</li>
+        <li>اضغط "حفظ" عشان تتسجل المشتريات.</li>
+        <li>تقدر تعدل أو تحذف أي عملية شراء سابقة.</li>
+      </ul>
+    </p>
+  </div>
+  
+ <!-- قسم المشتريات -->
+  <div class="glass p-6 rounded-lg shadow-lg mb-8">
+      <h2 class="text-3xl font-bold mb-4 text-red-400">2. المشتريات (Purchases)</h2>
+    <p class="mb-4">قسم “المشتريات” بيختلف عن قسم “المخزون”: هنا بتحسب قيمة كل اللي اشتريته خلال فترة معينة بدون ما تتأثر بكمية البيع اللي حصلت. يعني هتعرف بالظبط قد إيه صرفت فلوس على شراء البضاعة سواء لسه في المخزن أو تم بيعها.</p>
+    <p class="mb-4">
+      <span class="font-semibold">إزاي تستخدمها:</span>
+      <ul class="list-disc list-inside ml-4">
+        <li>اكتب اسم الصنف،  وسعر الشراء أو إجمالي المبلغ.</li>
+        <li>اضغط “حفظ” عشان تتسجل قيمة المشتريات.</li>
+        <li>تقدر تحذف أي عملية شراء سابقة.</li>
+        <li>يتم اضافة القطع المضافة اللي المخزون هنا بشكل تلقائي </li>
+      </ul>
+    </p>
+  </div>
+
+
+  <!-- قسم المبيعات (Sales) -->
+  <div class="glass p-6 rounded-lg shadow-lg mb-8">
+    <h2 class="text-3xl font-bold mb-4 text-red-400">3. المبيعات (Sales)</h2>
+    <p class="mb-4">في القسم ده بتسجل كل المنتجات اللي بتبيعها من مخزنك. ده بيساعدك تتابع إيراداتك وتعرف إيه اللي خرج من المخزن.</p>
+    <p class="mb-4">
+      <span class="font-semibold">إزاي تستخدمها:</span>
+      <ul class="list-disc list-inside ml-4">
+        <li>اضغط على "إضافة مبيعات جديدة".</li>
+        <li>اختار المنتج اللي اتباع، الكمية، والسعر.</li>
+        <li>اضغط "حفظ" عشان تتسجل عملية البيع.</li>
+        <li>تقدر تعدل أو تحذف أي عملية بيع سابقة.</li>
+      </ul>
+    </p>
+  </div>
+
+  <!-- قسم المصروفات (Expenses) -->
+  <div class="glass p-6 rounded-lg shadow-lg mb-8">
+    <h2 class="text-3xl font-bold mb-4 text-orange-400">4. المصروفات (Expenses)</h2>
+    <p class="mb-4">هنا بتسجل كل المصاريف اللي بتدفعها عشان تدير مخزنك أو شغلك. ده بيساعدك تحسب صافي أرباحك بدقة.</p>
+    <p class="mb-4">
+      <span class="font-semibold">إزاي تستخدمها:</span>
+      <ul class="list-disc list-inside ml-4">
+        <li>دخل وصف للمصروف والمبلغ.</li>
+        <li>اضغط "اضافة" عشان يتسجل المصروف.</li>
+        <li>تقدر تعدل أو تحذف أي مصروف سابق.</li>
+      </ul>
+    </p>
+  </div>
+
+
+  <!-- قسم الأرباح (Profit) -->
+  <div class="glass p-6 rounded-lg shadow-lg mb-8">
+    <h2 class="text-3xl font-bold mb-4 text-purple-400">5. الاحصائيات </h2>
+    <p class="mb-4">القسم ده بيوريك ملخص مالي شامل لأداء مخزنك. هتشوف فيه إجمالي المشتريات، إجمالي المبيعات، إجمالي المصروفات، وفي النهاية صافي الربح أو الخسارة.</p>
+    <p class="mb-4">
+      <span class="font-semibold">إزاي تستخدمها:</span>
+      الصفحة دي بتعرضلك كل الأرقام تلقائيًا بناءً على البيانات اللي دخلتها في الأقسام التانية. كمان هتلاقي رسم بياني بيوضحلك الأداء بشكل مرئي.
+    </p>
+  </div>
+
+  <div class="glass p-6 rounded-lg shadow-lg text-center" dir="rtl">
+    <h2 class="text-3xl font-bold mb-4">نصائح سريعة:</h2>
+    <ul class="list-disc list-inside mx-auto max-w-2xl text-left mb-6">
+      <li><span class="font-semibold">سجل كل حاجة:</span> عشان تكون أرقامك دقيقة، حاول تسجل كل عملية شراء أو بيع أو مصروف أول بأول.</li>
+      <li><span class="font-semibold">راجع بياناتك:</span> بص على لوحة التحكم وصفحة الأرباح بانتظام عشان تتابع أداء مخزنك.</li>
+      <li><span class="font-semibold">استخدم التعديل والحذف:</span> لو فيه أي غلطة في إدخال البيانات، تقدر تعدلها أو تحذفها بسهولة.</li>
+    </ul>
+    <p class="text-xl font-bold">نتمنى لك استخدامًا موفقًا!</p>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

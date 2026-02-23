@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const invoiceFileSchema = new mongoose.Schema({
+    
   buffer: {
     type: Buffer,
     required: true,

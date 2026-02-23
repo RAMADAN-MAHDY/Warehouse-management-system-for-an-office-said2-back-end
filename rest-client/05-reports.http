@@ -1,0 +1,69 @@
+### ======================================================
+### 📊 REPORTS TESTS - اختبار التقارير المنفصلة لكل عميل
+### ملف: 05-reports.http
+### ======================================================
+
+@baseUrl = http://localhost:5000
+@token1 = PUT_TENANT1_TOKEN_HERE
+@token2 = PUT_TENANT2_TOKEN_HERE
+
+### ✅ TEST 1: ملخص شامل للعميل الأول
+### يتضمن: المخزون، المبيعات، الأرباح، آخر الفواتير
+GET {{baseUrl}}/api/reports/summary
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 2: ملخص شامل للعميل الثاني (أرقام مختلفة تماماً)
+GET {{baseUrl}}/api/reports/summary
+Authorization: Bearer {{token2}}
+
+###
+### ✅ TEST 3: تقرير مبيعات العميل الأول مع ترقيم الصفحات
+GET {{baseUrl}}/api/reports/sales?page=1&limit=10
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 4: تقرير مبيعات بفلتر تاريخي
+GET {{baseUrl}}/api/reports/sales?from=2026-02-01&to=2026-02-28
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 5: تقرير المخزون الكامل للعميل الأول
+GET {{baseUrl}}/api/reports/inventory
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 6: تقرير المخزون المنخفض (أقل من 5 قطع)
+GET {{baseUrl}}/api/reports/inventory?lowStock=true
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 7: بحث في المخزون
+GET {{baseUrl}}/api/reports/inventory?search=laptop
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 8: تقرير الأرباح للعميل الأول
+### يُظهر: إجمالي المبيعات، المشتريات، المصروفات، صافي الربح، هامش الربح%
+GET {{baseUrl}}/api/reports/profit
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 9: تقرير الأرباح بفترة زمنية محددة
+GET {{baseUrl}}/api/reports/profit?from=2026-01-01&to=2026-12-31
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 10: تقرير الأرباح للعميل الثاني (أرقام معزولة)
+GET {{baseUrl}}/api/reports/profit
+Authorization: Bearer {{token2}}
+
+###
+### ❌ TEST 11: محاولة وصول بدون توكن (يجب أن يُرجع 401)
+GET {{baseUrl}}/api/reports/summary
+
+###
+### ❌ TEST 12: توكن بدون customerId (يجب أن يُرجع 403)
+### هذا يختبر tenantMiddleware مع مستخدم قديم بدون customerId
+GET {{baseUrl}}/api/reports/summary
+Authorization: Bearer OLD_USER_WITHOUT_CUSTOMERID_TOKEN

@@ -1,0 +1,97 @@
+@baseUrl = http://localhost:5000
+
+### Register Admin User
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "admin_test",
+  "password": "password123",
+  "role": "admin"
+}
+
+### Login Admin User
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin_test",
+  "password": "password123"
+}
+
+### Capture Admin Token
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWM2MDQwZmM0NzZmY2U2ZjI2ZWQ1ZSIsImlhdCI6MTc3MTg1NjAzNSwiZXhwIjoxNzcyNDYwODM1fQ.9cknM4k4w46vTskheSnGqClajMHolsvI8GqyHLc5rZc
+
+### Create a new Item (Test COGS)
+POST {{baseUrl}}/api/items
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "modelNumber": "COGS-TEST-001",
+  "name": "Test Product for COGS",
+  "description": "A product to test COGS calculation",
+  "quantity": 0,
+  "price": 100,
+  "costPrice": 0,
+  "customer": "Test Customer"
+}
+
+### Get Item Details (after creation)
+GET {{baseUrl}}/api/items?modelNumber=COGS-TEST-001
+Authorization: Bearer {{adminToken}}
+
+### Purchase the Test Item (Initial Purchase)
+POST {{baseUrl}}/api/purchases
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "modelNumber": "COGS-TEST-001",
+  "name": "Test Product for COGS",
+  "quantity": 10,
+  "price": 50,
+  "supplier": "Test Supplier"
+}
+
+### Get Item Details (after initial purchase)
+GET {{baseUrl}}/api/items?modelNumber=COGS-TEST-001
+Authorization: Bearer {{adminToken}}
+
+### Purchase the Test Item (Second Purchase to test weighted average)
+POST {{baseUrl}}/api/purchases
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "modelNumber": "COGS-TEST-001",
+  "name": "Test Product for COGS",
+  "quantity": 10,
+  "price": 60,
+  "supplier": "Test Supplier 2"
+}
+
+### Get Item Details (after second purchase)
+GET {{baseUrl}}/api/items?modelNumber=COGS-TEST-001
+Authorization: Bearer {{adminToken}}
+
+### Sell the Test Item
+POST {{baseUrl}}/api/sales
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "modelNumber": "COGS-TEST-001",
+  "name": "Test Product for COGS",
+  "quantity": 5,
+  "price": 120,
+  "sellerName": "Test Seller"
+}
+
+### Get Sale Invoices (to check costPrice)
+GET {{baseUrl}}/api/sales
+Authorization: Bearer {{adminToken}}
+
+### Get Profit Summary
+GET {{baseUrl}}/api/profit
+Authorization: Bearer {{adminToken}}

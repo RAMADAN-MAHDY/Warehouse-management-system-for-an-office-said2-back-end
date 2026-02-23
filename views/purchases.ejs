@@ -13,9 +13,9 @@
       </div>
       <div>
         <label class="block mb-2 text-sm font-semibold text-gray-300">المشتريات</label>
-        <input type="text" name="reason" class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" placeholder="سبب التعديل" required>
+        <input type="text" name="reason" class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" placeholder="الاسم" required>
       </div>
-      <button type="submit" class="bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors">حفظ التعديل</button>
+      <button type="submit" class="bg-blue-600 text-white font-bold p-2 rounded-lg hover:bg-blue-700 transition-colors">حفظ</button>
     </form>
   </div>
 
@@ -45,6 +45,7 @@ const purchasesTable = document.getElementById('purchasesTable');
 async function fetchPurchases(){
   const res = await fetch('/api/purchases', { headers: { Authorization: 'Bearer ' + token }});
   const data = await res.json();
+//   console.log(data);
   purchasesTable.innerHTML = '';
   if (data.status) {
     data.data.forEach(p => {
@@ -54,22 +55,23 @@ async function fetchPurchases(){
       tr.innerHTML = `
         <td class="p-3">${new Date(p.date || p.createdAt).toISOString().slice(0,10)}</td>
         <td class="p-3">${p.description}</td>
-        <td class="p-3">${p.supplier || '-'}</td>
-        <td class="p-3">${p.quantity ?? '-'}</td>
-        <td class="p-3">${p.price?.toFixed ? p.price.toFixed(2) : (p.price ?? '-')}</td>
+        <td class="p-3">${p.itemId?.customer || '-'}</td>
+        <td class="p-3">${Number(p.amount).toFixed(0) / p.itemId.price.toFixed(0) ?? "-" } </td>
+        <td class="p-3">${p.itemId?.price?.toFixed ? p.itemId.price.toFixed(2) : (p.itemId.price ?? '-')}</td>
         <td class="p-3 text-green-400 font-semibold">${Number(p.amount).toFixed(2)}</td>
         <td class="p-3 flex gap-2">
-          <button class="editBtn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-semibold">تعديل</button>
           <button class="deleteBtn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-xs font-semibold">حذف</button>
         </td>`;
       purchasesTable.appendChild(tr);
+        //   <button class="editBtn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-semibold">تعديل</button>
+        // <td class="p-3">${p.itemId?.quantity ?? '-'}</td>
     });
     bindRowEvents();
   }
 }
 function bindRowEvents(){
   purchasesTable.querySelectorAll('.editBtn').forEach(btn=>{
-    btn.onclick = () => { Swal.fire('ملاحظة','تمت إزالة نموذج التعديل.','info'); };
+    // btn.onclick = () => { Swal.fire('ملاحظة','تمت إزالة نموذج التعديل.','info'); };
   });
   purchasesTable.querySelectorAll('.deleteBtn').forEach(btn=>{
     btn.onclick = async () => {

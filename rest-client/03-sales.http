@@ -1,0 +1,85 @@
+### ======================================================
+### 💰 SALES TESTS - اختبار فواتير البيع
+### ملف: 03-sales.http
+### ======================================================
+
+@baseUrl = http://localhost:5000
+@token1 = PUT_TENANT1_TOKEN_HERE
+@token2 = PUT_TENANT2_TOKEN_HERE
+
+### ✅ TEST 1: إنشاء فاتورة بيع للعميل الأول
+### (تأكد من وجود LAPTOP-001 في المخزون أولاً - ملف 02-items.http)
+POST {{baseUrl}}/api/sales
+Content-Type: application/json
+Authorization: Bearer {{token1}}
+
+{
+  "modelNumber": "LAPTOP-001",
+  "name": "كمبيوتر محمول Dell",
+  "quantity": 2,
+  "price": 9500,
+  "sellerName": "أحمد محمد"
+}
+
+###
+### ✅ TEST 2: فاتورة بيع ثانية للعميل الأول
+POST {{baseUrl}}/api/sales
+Content-Type: application/json
+Authorization: Bearer {{token1}}
+
+{
+  "modelNumber": "PHONE-002",
+  "name": "هاتف Samsung Galaxy",
+  "quantity": 3,
+  "price": 3800,
+  "sellerName": "محمد علي"
+}
+
+###
+### ✅ TEST 3: فاتورة بيع للعميل الثاني
+POST {{baseUrl}}/api/sales
+Content-Type: application/json
+Authorization: Bearer {{token2}}
+
+{
+  "modelNumber": "TV-001",
+  "name": "تلفاز LG 55 بوصة",
+  "quantity": 1,
+  "price": 13500,
+  "sellerName": "سارة محمد"
+}
+
+###
+### 🔒 TEST 4: العميل الأول يرى فواتيره فقط
+GET {{baseUrl}}/api/sales
+Authorization: Bearer {{token1}}
+
+###
+### 🔒 TEST 5: العميل الثاني يرى فواتيره فقط
+GET {{baseUrl}}/api/sales
+Authorization: Bearer {{token2}}
+
+###
+### ✅ TEST 6: فلترة بالتاريخ للعميل الأول
+GET {{baseUrl}}/api/sales?from=2024-01-01&to=2026-12-31
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 7: فلترة بالشهر
+GET {{baseUrl}}/api/sales?month=2026-02
+Authorization: Bearer {{token1}}
+
+###
+### ❌ TEST 8: البيع من مخزون عميل آخر (يجب أن يُرجع 404)
+### العميل الثاني يحاول بيع LAPTOP-001 الذي يخص العميل الأول
+POST {{baseUrl}}/api/sales
+Content-Type: application/json
+Authorization: Bearer {{token2}}
+
+{
+  "modelNumber": "LAPTOP-001",
+  "name": "كمبيوتر محمول Dell",
+  "quantity": 1,
+  "price": 9500,
+  "sellerName": "مجهول"
+}

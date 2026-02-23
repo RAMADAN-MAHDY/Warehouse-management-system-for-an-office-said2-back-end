@@ -1,0 +1,93 @@
+### Customer ID System - API Tests
+### تأكد من تشغيل السيرفر: npm run dev
+
+@baseUrl = http://localhost:5000
+@token1 = REPLACE_WITH_TOKEN_AFTER_LOGIN
+@token2 = REPLACE_WITH_TENANT2_TOKEN
+
+### ============================================
+### 1. تسجيل العميل الأول (يحصل على customerId تلقائياً)
+### ============================================
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "tenant1",
+  "password": "password123",
+  "companyName": "شركة الأولى"
+}
+
+###
+### 2. تسجيل العميل الثاني
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "tenant2",
+  "password": "password456",
+  "companyName": "شركة الثانية"
+}
+
+###
+### 3. تسجيل دخول العميل الأول
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "tenant1",
+  "password": "password123"
+}
+
+###
+### 4. عرض بيانات المستخدم الحالي (يتضمن customerId)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{token1}}
+
+###
+### 5. إضافة منتج للعميل الأول
+POST {{baseUrl}}/api/items
+Content-Type: application/json
+Authorization: Bearer {{token1}}
+
+{
+  "modelNumber": "PROD-001",
+  "name": "كمبيوتر محمول",
+  "quantity": 10,
+  "price": 5000,
+  "customer": "المورد الأول"
+}
+
+###
+### 6. جلب منتجات العميل الأول فقط (يجب ألا يُظهر بيانات tenant2)
+GET {{baseUrl}}/api/items
+Authorization: Bearer {{token1}}
+
+###
+### 7. اختبار عزل البيانات - العميل الثاني لا يرى منتجات الأول
+GET {{baseUrl}}/api/items
+Authorization: Bearer {{token2}}
+
+###
+### 8. تقرير ملخص العميل الأول
+GET {{baseUrl}}/api/reports/summary
+Authorization: Bearer {{token1}}
+
+###
+### 9. تقرير المبيعات مع ترqيم الصفحات
+GET {{baseUrl}}/api/reports/sales?page=1&limit=10&from=2024-01-01
+Authorization: Bearer {{token1}}
+
+###
+### 10. تقرير المخزون - منتجات منخفضة الكمية
+GET {{baseUrl}}/api/reports/inventory?lowStock=true
+Authorization: Bearer {{token1}}
+
+###
+### 11. تقرير الأرباح لفترة زمنية محددة
+GET {{baseUrl}}/api/reports/profit?from=2024-01-01&to=2024-12-31
+Authorization: Bearer {{token1}}
+
+###
+### 12. بحث عن منتجات بالاسم (يُصفَّى بـ customerId تلقائياً)
+GET {{baseUrl}}/api/items/search?search=كمبيوتر
+Authorization: Bearer {{token1}}

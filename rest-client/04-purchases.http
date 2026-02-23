@@ -1,0 +1,68 @@
+### ======================================================
+### 🛒 PURCHASES TESTS - اختبار عزل المشتريات
+### ملف: 04-purchases.http
+### ======================================================
+
+@baseUrl = http://localhost:5000
+@token1 = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWIxOTMwNjlkNDhhMzYxZWU4MDFmMiIsImlhdCI6MTc3MTc5OTc5MywiZXhwIjoxNzcyNDA0NTkzfQ.t7AZLSTiUh7utD6N_vdPT2sJhIQugVimLWZIc2QOIMM
+@token2 = PUT_TENANT2_TOKEN_HERE
+
+### ✅ TEST 1: إنشاء فاتورة شراء للعميل الأول
+POST {{baseUrl}}/api/purchases
+Content-Type: application/json
+Authorization: Bearer {{token1}}
+
+{
+  "modelNumber": "LAPTOP-002",
+  "name": "كمبيوتر محمول HP",
+  "quantity": 10,
+  "price": 7000,
+  "supplier": "HP Official Store",
+  "date": "2026-02-20"
+}
+
+###
+### ✅ TEST 2: شراء للعميل الثاني
+POST {{baseUrl}}/api/purchases
+Content-Type: application/json
+Authorization: Bearer {{token2}}
+
+{
+  "modelNumber": "AC-001",
+  "name": "مكيف Carrier",
+  "quantity": 5,
+  "price": 15000,
+  "supplier": "Carrier Egypt",
+  "date": "2026-02-21"
+}
+
+###
+### 🔒 TEST 3: العميل الأول يرى مشترياته فقط
+GET {{baseUrl}}/api/purchases
+Authorization: Bearer {{token1}}
+
+###
+### 🔒 TEST 4: العميل الثاني يرى مشترياته فقط
+GET {{baseUrl}}/api/purchases
+Authorization: Bearer {{token2}}
+
+###
+### ❌ TEST 5: تحديث مشتريات عميل آخر (يجب أن يُرجع 404)
+### ← ضع ID مشتريات tenant1 هنا
+PUT {{baseUrl}}/api/purchases/PUT_TENANT1_PURCHASE_ID_HERE
+Content-Type: application/json
+Authorization: Bearer {{token2}}
+
+{
+  "modelNumber": "HACK-001",
+  "name": "محاولة اختراق",
+  "quantity": 1,
+  "price": 1,
+  "supplier": "Hacker"
+}
+
+###
+### ❌ TEST 6: حذف مشتريات عميل آخر (يجب أن يُرجع 404)
+### ← ضع ID مشتريات tenant1 هنا
+DELETE {{baseUrl}}/api/purchases/PUT_TENANT1_PURCHASE_ID_HERE
+Authorization: Bearer {{token2}}

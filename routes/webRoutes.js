@@ -8,17 +8,37 @@ const Purchase = require('../models/Purchase');
 const Expense = require('../models/Expense');
 const profitController = require('../controllers/profitController');
 const protect = require('../middleware/protectMiddleware');
+const tenantMiddleware = require('../middleware/tenantMiddleware');
+const jwt = require('jsonwebtoken');
+const { generateUniqueCustomerId } = require('../utils/generateCustomerId');
 const router = express.Router();
+
+/**
+ * مساعد: يُرجع customerId الحقيقي من session token
+ * يفك تشفير JWT ثم يجلب المستخدم من قاعدة البيانات
+ */
+async function getCustomerIdFromSession(req) {
+    if (!req.session || !req.session.token) return null;
+    try {
+        const decoded = jwt.verify(req.session.token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id).select('customerId');
+        return user ? user.customerId : null;
+    } catch (err) {
+        return null;
+    }
+}
 
 // تصدير فواتير المبيعات إلى إكسل حسب الفترة
 router.get('/sales/export', requireLogin, async (req, res) => {
     try {
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
         const { from, to } = req.query;
-        let query = {};
+        let query = { customerId };
         if (from && to) {
             const start = new Date(from);
             const end = new Date(to);
-            end.setDate(end.getDate() + 1); // تشمل اليوم الأخير
+            end.setDate(end.getDate() + 1);
             query.createdAt = { $gte: start, $lt: end };
         } else if (from) {
             query.createdAt = { $gte: new Date(from) };
@@ -26,9 +46,8 @@ router.get('/sales/export', requireLogin, async (req, res) => {
             query.createdAt = { $lte: new Date(to) };
         }
         const sales = await SaleInvoice.find(query);
-        // تجهيز البيانات للتصدير
         const data = sales.map(sale => ({
-            رقم_الفاتورة: sale._id.toString(), // تحويل الـ ObjectId إلى String
+            رقم_الفاتورة: sale._id.toString(),
             التاريخ: sale.createdAt ? sale.createdAt.toISOString().slice(0, 10) : '',
             المنتج: sale.name,
             الكمية: sale.quantity,
@@ -46,13 +65,15 @@ router.get('/sales/export', requireLogin, async (req, res) => {
 // صفحة تعديل فاتورة بيع
 router.get('/sales/edit/:id', requireLogin, async (req, res) => {
     try {
-        const sale = await SaleInvoice.findById(req.params.id).populate('item');
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
+        const sale = await SaleInvoice.findOne({ _id: req.params.id, customerId });
         if (!sale) return res.status(404).send('فاتورة غير موجودة');
         res.render('editSale', {
             sale: {
                 ...sale.toObject(),
-                itemName: sale.item ? sale.item.name : '',
-                sellerName: sale.sellerName // Pass sellerName to the view
+                itemName: '',
+                sellerName: sale.sellerName
             }
         });
     } catch {
@@ -63,13 +84,15 @@ router.get('/sales/edit/:id', requireLogin, async (req, res) => {
 // تنفيذ تعديل فاتورة بيع
 router.post('/sales/edit/:id', requireLogin, async (req, res) => {
     try {
-        const { quantity, price, sellerName } = req.body; // Include sellerName in the request body
-        const sale = await SaleInvoice.findById(req.params.id);
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
+        const { quantity, price, sellerName } = req.body;
+        const sale = await SaleInvoice.findOne({ _id: req.params.id, customerId });
         if (!sale) return res.status(404).send('فاتورة غير موجودة');
         sale.quantity = quantity;
         sale.price = price;
         sale.total = quantity * price;
-        sale.sellerName = sellerName; // Update sellerName
+        sale.sellerName = sellerName;
         await sale.save();
         res.redirect('/sales');
     } catch {
@@ -80,19 +103,18 @@ router.post('/sales/edit/:id', requireLogin, async (req, res) => {
 // حذف فاتورة بيع
 router.post('/sales/delete/:id', requireLogin, async (req, res) => {
     try {
-        await SaleInvoice.findByIdAndDelete(req.params.id);
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
+        await SaleInvoice.findOneAndDelete({ _id: req.params.id, customerId });
         res.redirect('/sales');
     } catch {
         res.status(500).send('خطأ في حذف الفاتورة');
     }
 });
 
-// Root route: redirect to dashboard or login
+// Root route: show home page
 router.get('/', (req, res) => {
-    if (req.session && req.session.loggedIn) {
-        return res.redirect('/dashboard');
-    }
-    res.redirect('/login');
+    res.render('home');
 });
 
 // Login page
@@ -129,46 +151,51 @@ router.post('/logout', (req, res) => {
     req.session.destroy(() => res.redirect('/login'));
 });
 
-// Dashboard
-// Pass JWT token to dashboard for frontend fetch
+// Dashboard - يجلب المنتجات الخاصة بالعميل فقط
 router.get('/dashboard', requireLogin, async (req, res) => {
     try {
-        const invoices = await Item.find().sort({ createdAt: -1 }).limit(10);
+        // ✅ الإصلاح: نجلب customerId الحقيقي من User model وليس decoded.id
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) {
+            return res.redirect('/login');
+        }
+        // جلب منتجات هذا العميل فقط
+        const invoices = await Item.find({ customerId }).sort({ createdAt: -1 });
         res.render('dashboard', { invoices, token: req.session.token });
-    } catch {
-        res.render('dashboard', { invoices: [], token: req.session.token });
+    } catch (error) {
+        console.error('Dashboard route error:', error);
+        res.render('dashboard', { invoices: [], token: req.session.token || '' });
     }
 });
 
-// عرض فواتير المبيعات مع فلترة التاريخ
-router.get('/sales', async (req, res) => {
+// عرض فواتير المبيعات مع فلترة التاريخ - معزولة بـ customerId
+router.get('/sales', requireLogin, async (req, res) => {
     try {
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
         const { from, to } = req.query;
-        let query = {};
+        let query = { customerId }; // ✅ الإصلاح: فلترة بـ customerId
         if (from && to) {
             const start = new Date(from);
             const end = new Date(to);
-            end.setDate(end.getDate() + 1); // تشمل اليوم الأخير
+            end.setDate(end.getDate() + 1);
             query.createdAt = { $gte: start, $lt: end };
-        }
-        else if (from) {
+        } else if (from) {
             query.createdAt = { $gte: new Date(from) };
         } else if (to) {
             query.createdAt = { $lte: new Date(to) };
         }
-
         const sales = await SaleInvoice.find(query);
         const salesWithNames = sales.map(sale => ({
             ...sale.toObject(),
-            itemName: sale.item ? sale.item.name : ''
+            itemName: ''
         }));
-
         res.render('sales', {
             sales: salesWithNames,
             token: req.session.token,
             error: null,
-            from: req.query.from || '',  // هنا
-            to: req.query.to || ''       // هنا
+            from: req.query.from || '',
+            to: req.query.to || ''
         });
     } catch (err) {
         console.error(err);
@@ -183,7 +210,7 @@ router.get('/sales', async (req, res) => {
 });
 
 
- // عرض ملفات الإكسل المحفوظة
+// عرض ملفات الإكسل المحفوظة
 router.get('/excel-files', requireLogin, async (req, res) => {
     try {
         const InvoiceFile = require('../models/InvoiceFile');
@@ -211,46 +238,63 @@ router.post('/excel-files/delete/:id', requireLogin, async (req, res) => {
 // عرض صفحة التسجيل
 router.get('/register', (req, res) => {
     res.render('register', { error: null, success: null });
-  });
+});
 
 router.post('/register', async (req, res) => {
     const { username, password, confirmPassword } = req.body;
-  
+
     if (password !== confirmPassword) {
-      return res.render('register', { error: 'كلمتا المرور غير متطابقتين', success: null });
+        return res.render('register', { error: 'كلمتا المرور غير متطابقتين', success: null });
     }
-  
+
     try {
-      const userExists = await User.findOne({ username });
-      if (userExists) {
-        return res.render('register', { error: 'اسم المستخدم موجود بالفعل', success: null });
-      }
-  
-      await User.create({ username, password }); // التشفير تلقائي عند الحفظ
-  
-      res.render('register', {
-        success: 'تم إنشاء الحساب بنجاح! يمكنك تسجيل الدخول الآن.',
-        error: null,
-      });
+        const userExists = await User.findOne({ username });
+        if (userExists) {
+            return res.render('register', { error: 'اسم المستخدم موجود بالفعل', success: null });
+        }
+        // ✅ الإصلاح: توليد customerId عند التسجيل من صفحة الويب أيضاً
+        const customerId = await generateUniqueCustomerId(User);
+        await User.create({ username, password, customerId });
+
+        res.render('register', {
+            success: `تم إنشاء الحساب بنجاح! معرفك: ${customerId}. يمكنك تسجيل الدخول الآن.`,
+            error: null,
+        });
     } catch (err) {
-      console.error(err);
-      res.render('register', { error: 'حدث خطأ أثناء إنشاء الحساب', success: null });
+        console.error(err);
+        res.render('register', { error: 'حدث خطأ أثناء إنشاء الحساب', success: null });
     }
-  });
-  
+});
+
 // صفحة المشتريات والمبيعات وصافي الربح
-router.get('/profit', requireLogin, profitController.getProfitSummary);
-router.post('/purchases/adjust', requireLogin, profitController.addPurchaseAdjustment);
-router.get('/api/profit', protect, profitController.getProfitSummaryJson);
-router.post('/api/purchases/adjust', protect, profitController.addPurchaseAdjustmentApi);
+router.get('/profit', requireLogin, async (req, res, next) => {
+    // ✅ حقن customerId في req قبل استدعاء profitController
+    const customerId = await getCustomerIdFromSession(req);
+    if (!customerId) return res.redirect('/login');
+    req.customerId = customerId;
+
+    next();
+}, profitController.getProfitSummary);
+
+router.post('/purchases/adjust', requireLogin, async (req, res, next) => {
+    const customerId = await getCustomerIdFromSession(req);
+    if (!customerId) return res.redirect('/login');
+    req.customerId = customerId;
+    next();
+}, profitController.addPurchaseAdjustment);
+
+router.get('/api/profit', protect, tenantMiddleware, profitController.getProfitSummaryJson);
+router.post('/api/purchases/adjust', protect, tenantMiddleware, profitController.addPurchaseAdjustmentApi);
 router.get('/purchases', requireLogin, async (req, res) => {
     res.render('purchases', { token: req.session.token });
 });
 
-// صفحة المصروفات
+// صفحة المصروفات - معزولة بـ customerId
 router.get('/expenses', requireLogin, async (req, res) => {
     try {
-        const expenses = await Expense.find();
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
+        const expenses = await Expense.find({ customerId });
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
         res.render('expenses', { expenses, totalExpenses });
     } catch (error) {
@@ -261,21 +305,25 @@ router.get('/expenses', requireLogin, async (req, res) => {
 // إضافة مصروف جديد
 router.post('/expenses/add', requireLogin, async (req, res) => {
     try {
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
         const { description, amount } = req.body;
         if (!description || !amount) return res.status(400).send('يرجى إدخال جميع البيانات');
-        await Expense.create({ description, amount });
+        await Expense.create({ customerId, description, amount });
         res.redirect('/expenses');
     } catch (error) {
         res.status(500).send('خطأ في إضافة المصروف');
     }
 });
 
-// تعديل مصروف
+// تعديل مصروف - معزول بـ customerId
 router.post('/expenses/edit/:id', requireLogin, async (req, res) => {
     try {
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
         const { description, amount } = req.body;
         if (!description || !amount) return res.status(400).send('يرجى إدخال جميع البيانات');
-        await Expense.findByIdAndUpdate(req.params.id, { description, amount });
+        await Expense.findOneAndUpdate({ _id: req.params.id, customerId }, { description, amount });
         res.redirect('/expenses');
     } catch (error) {
         res.status(500).send('خطأ في تعديل المصروف');
@@ -285,8 +333,10 @@ router.post('/expenses/edit/:id', requireLogin, async (req, res) => {
 // عرض فورم التعديل لمصروف (GET)
 router.get('/expenses/edit/:id', requireLogin, async (req, res) => {
     try {
-        const editExpense = await Expense.findById(req.params.id);
-        const expenses = await Expense.find();
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
+        const editExpense = await Expense.findOne({ _id: req.params.id, customerId });
+        const expenses = await Expense.find({ customerId });
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
         res.render('expenses', { expenses, totalExpenses, editExpense });
     } catch (error) {
@@ -294,10 +344,12 @@ router.get('/expenses/edit/:id', requireLogin, async (req, res) => {
     }
 });
 
-// حذف مصروف
+// حذف مصروف - معزول بـ customerId
 router.post('/expenses/delete/:id', requireLogin, async (req, res) => {
     try {
-        await Expense.findByIdAndDelete(req.params.id);
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
+        await Expense.findOneAndDelete({ _id: req.params.id, customerId });
         res.redirect('/expenses');
     } catch (error) {
         res.status(500).send('خطأ في حذف المصروف');

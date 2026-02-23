@@ -22,18 +22,18 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // جلسات المستخدمين
 app.use(session({
-  secret: process.env.JWT_SECRET || 'default_secret_key',
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGO_URI,
-    ttl: 24 * 60 * 60, // يوم كامل
-  }),
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
-  },
+    secret: process.env.JWT_SECRET || 'default_secret_key',
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGO_URI,
+        ttl: 24 * 60 * 60, // يوم كامل
+    }),
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000,
+    },
 }));
 
 // إعداد EJS و static
@@ -48,11 +48,12 @@ app.use('/api/items', require('../routes/itemRoutes'));
 app.use('/api/auth', require('../routes/authRoutes'));
 app.use('/api/sales', require('../routes/saleRoutes'));
 app.use('/api/purchases', require('../routes/purchaseRoutes'));
+app.use('/api/reports', require('../routes/reportRoutes'));
 
 // معالجة الأخطاء
 app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  res.status(500).json({ status: false, message: 'Internal Server Error' });
+    console.error('Server Error:', err);
+    res.status(500).json({ status: false, message: 'Internal Server Error' });
 });
 
 // ✅ التصدير بالطريقة الصحيحة لـ Vercel
@@ -61,8 +62,8 @@ module.exports.handler = serverless(app);
 
 // ✅ إضافة مستمع في وضع التطوير فقط
 if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running in development mode on http://localhost:${PORT}`);
-  });
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+        console.log(`Server running in development mode on http://localhost:${PORT}`);
+    });
 }

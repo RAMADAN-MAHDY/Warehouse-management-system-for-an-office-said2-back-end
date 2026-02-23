@@ -195,7 +195,10 @@ saveBtn.onclick = async () => {
 
     const editId = invoiceForm.getAttribute('data-edit-id');
     let url = '/api/items', method = 'POST';
-    if (editId) { url = `/api/items/${editId}`; method = 'PUT'; }
+    if (editId) {
+        url = `/api/items/${editId}`;
+        method = 'PUT';
+    }
 
     try {
         const res = await fetch(url, {
@@ -209,8 +212,8 @@ saveBtn.onclick = async () => {
         invoiceForm.removeAttribute('data-edit-id');
         invoiceForm.style.display = 'none';
 
-        const item = data.item || body;
-        item._id = data.item?._id || editId;
+        const item = data.data || body;
+        item._id = data.data?._id || editId;
 
         if (editId) {
             const row = recentInvoices.querySelector(`tr[data-id="${editId}"]`);

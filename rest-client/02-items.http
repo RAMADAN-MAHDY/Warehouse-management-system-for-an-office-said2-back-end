@@ -1,0 +1,80 @@
+### ======================================================
+### 📦 ITEMS TESTS - اختبار عزل المخزون بين العملاء
+### ملف: 02-items.http
+### ← ضع توكنات كل عميل هنا
+### ======================================================
+
+@baseUrl = http://localhost:5000
+@token1 = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWIxOTMwNjlkNDhhMzYxZWU4MDFmMiIsImlhdCI6MTc3MTc3NDcxOSwiZXhwIjoxNzcyMzc5NTE5fQ.shV7yF8LC1kRusALAG0QPkIbXb2Nod2LkbWpCbdN45A
+@token2 = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWIxOTM3NjlkNDhhMzYxZWU4MDFmNiIsImlhdCI6MTc3MTc3NDgxNywiZXhwIjoxNzcyMzc5NjE3fQ.ieUXUy_wc3_weEjuUSjvzTEqUoynITna3iCKauV-EAQ
+
+### ✅ TEST 1: إضافة منتج للعميل الأول
+### الرد المتوقع: { status: true, data: { customerId: "CUST-...", ... } }
+POST {{baseUrl}}/api/items
+Content-Type: application/json
+Authorization: Bearer {{token1}}
+
+{
+  "modelNumber": "LAPTOP-001",
+  "name": "كمبيوتر محمول Dell",
+  "quantity": 15,
+  "price": 8500,
+  "customer": "شركة Dell"
+}
+
+###
+### ✅ TEST 2: إضافة منتج ثانٍ للعميل الأول
+POST {{baseUrl}}/api/items
+Content-Type: application/json
+Authorization: Bearer {{token1}}
+
+{
+  "modelNumber": "PHONE-002",
+  "name": "هاتف Samsung Galaxy",
+  "quantity": 30,
+  "price": 3200,
+  "customer": "Samsung"
+}
+
+###
+### ✅ TEST 3: إضافة منتج للعميل الثاني (سيكون معزولاً)
+POST {{baseUrl}}/api/items
+Content-Type: application/json
+Authorization: Bearer {{token2}}
+
+{
+  "modelNumber": "TV-001",
+  "name": "تلفاز LG 55 بوصة",
+  "quantity": 8,
+  "price": 12000,
+  "customer": "LG Electronics"
+}
+
+###
+### 🔒 TEST 4: العميل الأول يرى منتجاته فقط (LAPTOP + PHONE)
+### الرد المتوقع: منتجان فقط، لا يظهر TV-001
+GET {{baseUrl}}/api/items
+Authorization: Bearer {{token1}}
+
+###
+### 🔒 TEST 5: العميل الثاني يرى منتجاته فقط (TV فقط)
+### الرد المتوقع: منتج واحد فقط، لا يظهر LAPTOP أو PHONE
+GET {{baseUrl}}/api/items
+Authorization: Bearer {{token2}}
+
+###
+### ✅ TEST 6: بحث العميل الأول (لا يُعيد نتائج العميل الثاني)
+GET {{baseUrl}}/api/items/search?search=laptop
+Authorization: Bearer {{token1}}
+
+###
+### ✅ TEST 7: بحث العميل الثاني
+GET {{baseUrl}}/api/items/search?search=تلفاز
+Authorization: Bearer {{token2}}
+
+###
+### ❌ TEST 8: محاولة حذف منتج العميل الأول بتوكن العميل الثاني
+### الرد المتوقع: 404 (Item not found - لأن العنصر لا ينتمي للعميل الثاني)
+### ← ضع ID منتج tenant1 هنا
+DELETE {{baseUrl}}/api/items/PUT_TENANT1_ITEM_ID_HERE
+Authorization: Bearer {{token2}}

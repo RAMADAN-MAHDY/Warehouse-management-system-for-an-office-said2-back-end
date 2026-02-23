@@ -1,22 +1,32 @@
 const express = require('express');
 const router = express.Router();
 const protect = require('../middleware/protectMiddleware');
+const tenantMiddleware = require('../middleware/tenantMiddleware');
 const {
-  getAllItems,
-  searchItems,
-  addItem,
-  updateItem,
-  exportToExcel,
-  downloadExcel,
-  deleteItem
+    getAllItems,
+    searchItems,
+    addItem,
+    updateItem,
+    exportToExcel,
+    downloadExcel,
+    deleteItem,
+    updateExpense,
+    deleteExpense
 } = require('../controllers/itemController');
 
-router.get('/', protect, getAllItems);
-router.get('/search', protect, searchItems);
-router.post('/', protect, addItem);
-router.put('/:id', protect, updateItem);
-router.delete('/:id', protect, deleteItem);
-router.get('/export', protect, exportToExcel);
-router.get('/download/:id', protect, downloadExcel);
+// تطبيق حماية JWT وعزل العميل على جميع المسارات
+router.use(protect, tenantMiddleware);
+
+router.get('/', getAllItems);
+router.get('/search', searchItems);
+router.post('/', addItem);
+router.put('/:id', updateItem);
+router.delete('/:id', deleteItem);
+router.get('/export', exportToExcel);
+router.get('/download/:id', downloadExcel);
+
+// مصروفات
+router.put('/expenses/:id', updateExpense);
+router.delete('/expenses/:id', deleteExpense);
 
 module.exports = router;

@@ -1,0 +1,73 @@
+### ======================================================
+### 🔐 AUTH TESTS - التسجيل وتسجيل الدخول
+### ملف: 01-auth.http
+### كيفية الاستخدام:
+###  1. شغّل السيرفر: npm run dev
+###  2. اضغط "Send Request" فوق كل طلب
+###  3. انسخ التوكن من الرد وضعه في @token
+### ======================================================
+
+@baseUrl = http://localhost:5000
+
+### ✅ TEST 1: تسجيل مستخدم جديد (tenant1)
+### الرد المتوقع: { status: true, customerId: "CUST-XXXXXXXX", token: "..." }
+# @name register1
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "tenant1_test",
+  "password": "password123",
+  "companyName": "شركة الأولى للتجارة"
+}
+
+###
+### ✅ TEST 2: تسجيل مستخدم ثانٍ (tenant2) للتحقق من العزل
+### الرد المتوقع: customerId مختلف عن tenant1
+# @name register2
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "tenant2_test",
+  "password": "password456",
+  "companyName": "شركة الثانية للاستيراد"
+}
+
+###
+### ✅ TEST 3: تسجيل دخول tenant1
+### انسخ token من الرد وضعه في ملف 00-variables.http
+# @name login1
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "tenant1_test",
+  "password": "password123"
+}
+
+###
+### ✅ TEST 4: تسجيل دخول tenant2
+# @name login2
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "tenant2_test",
+  "password": "password456"
+}
+
+###
+### ✅ TEST 5: جلب بيانات المستخدم الحالي (يتضمن customerId)
+### ← ضع token هنا بعد تسجيل الدخول
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWIxOTM3NjlkNDhhMzYxZWU4MDFmNiIsImlhdCI6MTc3MTc3MjIyNywiZXhwIjoxNzcyMzc3MDI3fQ.5J8u5le7kavuOMMwNgDPBQERR4Ooa00F1I3iDq-oxWI
+
+###
+### ❌ TEST 6: محاولة وصول بدون توكن (يجب أن يُرجع 401)
+GET {{baseUrl}}/api/auth/me
+
+###
+### ❌ TEST 7: توكن مزيف (يجب أن يُرجع 401)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer invalid.token.here

@@ -1,0 +1,18 @@
+# Register a new user
+POST https://management-system-said2.vercel.app//api/auth/register
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123456789rR@",
+  "email": "said2@example.com"
+}
+
+###login a user
+POST https://management-system-said2.vercel.app/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123456789rR@"
+}
