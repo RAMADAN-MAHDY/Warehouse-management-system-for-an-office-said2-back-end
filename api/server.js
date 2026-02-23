@@ -38,6 +38,7 @@ app.use(session({
 
 // إعداد EJS و static
 app.set('view engine', 'ejs');
+// المسارات يجب أن تكون نسبية لـ __dirname بشكل صحيح في بيئة Vercel
 app.set('views', path.join(__dirname, '../views'));
 app.use(express.static(path.join(__dirname, '../public')));
 app.set('trust proxy', 1);

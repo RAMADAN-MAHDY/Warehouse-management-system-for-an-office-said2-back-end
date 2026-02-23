@@ -16,8 +16,8 @@ POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
 
 {
-  "username": "tenant1_test",
-  "password": "password123",
+  "username": "admin",
+  "password": "123456789rR@",
   "companyName": "شركة الأولى للتجارة"
 }
 
