@@ -9,14 +9,16 @@ const {
     deleteSaleInvoice,
     bulkDeleteSaleInvoices
 } = require('../controllers/saleController');
+const validate = require('../middleware/validateMiddleware');
+const { saleSchema, bulkDeleteSchema } = require('../validations/saleValidation');
 
 // تطبيق حماية JWT وعزل العميل على جميع المسارات
 router.use(protect, tenantMiddleware);
 
-router.post('/', addSaleInvoice);
+router.post('/', validate(saleSchema), addSaleInvoice);
 router.get('/', getSaleInvoices);
-router.put('/:id', updateSaleInvoice);
+router.put('/:id', validate(saleSchema), updateSaleInvoice);
 router.delete('/:id', deleteSaleInvoice);
-router.post('/bulk-delete', bulkDeleteSaleInvoices);
+router.post('/bulk-delete', validate(bulkDeleteSchema), bulkDeleteSaleInvoices);
 
 module.exports = router;

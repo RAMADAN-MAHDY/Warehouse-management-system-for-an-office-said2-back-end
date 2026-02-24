@@ -47,9 +47,6 @@ exports.addPurchaseAdjustment = async (req, res) => {
     try {
         const { amount, reason } = req.body;
         const val = parseFloat(amount);
-        if (isNaN(val)) {
-            return res.status(400).send('قيمة المبلغ غير صالحة');
-        }
         await Purchase.create({
             customerId: req.customerId,
             description: reason || 'تعديل يدوي لإجمالي المشتريات',
@@ -67,10 +64,7 @@ exports.addPurchaseAdjustment = async (req, res) => {
 exports.addPurchaseAdjustmentApi = async (req, res) => {
     try {
         const { amount, reason } = req.body;
-        const val = parseFloat(amount);
-        if (isNaN(val)) {
-            return res.status(400).json({ status: false, message: 'قيمة المبلغ غير صالحة' });
-        }
+        const val = amount; // Already a number due to Joi validation
         const doc = await Purchase.create({
             customerId: req.customerId,
             description: reason || 'تعديل يدوي لإجمالي المشتريات',

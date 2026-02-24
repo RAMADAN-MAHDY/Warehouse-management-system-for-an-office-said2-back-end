@@ -284,7 +284,9 @@ router.post('/purchases/adjust', requireLogin, async (req, res, next) => {
 }, profitController.addPurchaseAdjustment);
 
 router.get('/api/profit', protect, tenantMiddleware, profitController.getProfitSummaryJson);
-router.post('/api/purchases/adjust', protect, tenantMiddleware, profitController.addPurchaseAdjustmentApi);
+const { profitAdjustmentSchema } = require('../validations/reportValidation');
+const validate = require('../middleware/validateMiddleware');
+router.post('/api/purchases/adjust', protect, tenantMiddleware, validate(profitAdjustmentSchema), profitController.addPurchaseAdjustmentApi);
 router.get('/purchases', requireLogin, async (req, res) => {
     res.render('purchases', { token: req.session.token });
 });

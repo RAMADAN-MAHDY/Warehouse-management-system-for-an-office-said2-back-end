@@ -5,10 +5,6 @@ exports.addSaleInvoice = async (req, res) => {
     try {
         const { modelNumber, name, quantity, price, sellerName, total: frontTotal } = req.body;
 
-        if (!modelNumber || !name || quantity == null || price == null) {
-            return res.status(400).json({ status: false, message: 'يرجى تقديم جميع الحقول المطلوبة', data: null });
-        }
-
         // البحث عن العنصر مع تطبيق عزل العميل
         const item = await Item.findOne({ modelNumber, customerId: req.customerId });
 
@@ -137,10 +133,6 @@ exports.deleteSaleInvoice = async (req, res) => {
 exports.bulkDeleteSaleInvoices = async (req, res) => {
     try {
         const { ids } = req.body;
-
-        if (!ids || !Array.isArray(ids) || ids.length === 0) {
-            return res.status(400).json({ status: false, message: 'الرجاء تقديم قائمة بمعرفات الفواتير للحذف.' });
-        }
 
         for (const id of ids) {
             const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId });

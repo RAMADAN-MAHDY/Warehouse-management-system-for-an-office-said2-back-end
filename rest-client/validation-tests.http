@@ -1,0 +1,117 @@
+### ======================================================
+### 🧪 JOI VALIDATION TESTS - التحقق من صحة البيانات
+### ملف: validation-tests.http
+### ======================================================
+
+@baseUrl = http://localhost:5000
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWM2OWU2MWZkMWNkZGQ4OTM5NWI3NiIsImlhdCI6MTc3MTk0NjE0MSwiZXhwIjoxNzcyNTUwOTQxfQ.vFHUOFydl_fjMMe2PE_PUfmrLbyjCQaao3IlTxBSer0
+
+### ------------------------------------------------------
+### 🔐 AUTH VALIDATION - التحقق من الحسابات
+### ------------------------------------------------------
+
+### ❌ TEST 1: تسجيل مستخدم ببيانات ناقصة (يجب أن يفشل)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "ad"
+}
+
+### ❌ TEST 2: تسجيل مستخدم بكلمة مرور قصيرة (يجب أن يفشل)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "new_admin",
+  "password": "123"
+}
+
+### ✅ TEST 3: تسجيل دخول ناجح (بيانات صحيحة)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123456789rR@"
+}
+
+
+### ------------------------------------------------------
+### 📦 ITEMS VALIDATION - التحقق من الأصناف
+### ------------------------------------------------------
+
+### ❌ TEST 4: إضافة صنف بحقول ناقصة (يجب أن يفشل)
+POST {{baseUrl}}/api/items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "صنف تجريبي"
+}
+
+### ❌ TEST 5: إضافة صنف بكمية سالبة (يجب أن يفشل)
+POST {{baseUrl}}/api/items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "modelNumber": "M123",
+  "name": "صنف تجريبي",
+  "quantity": -10,
+  "price": 100,
+  "customer": "تاجر الجملة"
+}
+
+### ❌ TEST 6: إضافة صنف باسم طويل جداً (يجب أن يفشل)
+POST {{baseUrl}}/api/items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "modelNumber": "M123",
+  "name": "هذا الاسم طويل جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً جداً",
+  "quantity": 10,
+  "price": 100,
+  "customer": "تاجر الجملة"
+}
+
+
+### ------------------------------------------------------
+### 💰 SALES VALIDATION - التحقق من المبيعات
+### ------------------------------------------------------
+
+### ❌ TEST 7: إضافة فاتورة بيع بسعر سالب (يجب أن يفشل)
+POST {{baseUrl}}/api/sales
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "modelNumber": "M123",
+  "name": "صنف تجريبي",
+  "quantity": 2,
+  "price": -50
+}
+
+
+### ------------------------------------------------------
+### 📊 REPORTS VALIDATION - التحقق من التقارير
+### ------------------------------------------------------
+
+### ❌ TEST 8: طلب تقرير مبيعات بتنسيق تاريخ خاطئ (يجب أن يفشل)
+GET {{baseUrl}}/api/reports/sales?from=2024/01/01
+Authorization: Bearer {{token}}
+
+### ❌ TEST 9: طلب تقرير مبيعات بصفحة غير صالحة (يجب أن يفشل)
+GET {{baseUrl}}/api/reports/sales?page=invalid
+Authorization: Bearer {{token}}
+
+### ❌ TEST 10: تعديل إجمالي مشتريات بمبلغ ضخم جداً (يجب أن يفشل)
+POST {{baseUrl}}/api/purchases/adjust
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "amount": 999999999999,
+  "reason": "تعديل وهمي"
+}

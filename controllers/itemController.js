@@ -48,9 +48,6 @@ exports.searchItems = async (req, res) => {
 exports.addItem = async (req, res) => {
     try {
         const { modelNumber, name, quantity, price, customer } = req.body;
-        if (!modelNumber || !name || quantity == null || price == null || !customer) {
-            return res.status(400).json({ status: false, message: 'Please provide all required fields', data: null });
-        }
         // إضافة customerId تلقائياً من بيانات المستخدم المسجّل
         const item = await Item.create({ modelNumber, name, quantity, price, costPrice: price, customer, customerId: req.customerId });
         const fullItem = await Item.findById(item._id);
@@ -73,13 +70,7 @@ exports.addItem = async (req, res) => {
 
 exports.updateItem = async (req, res) => {
     try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-            return res.status(400).json({ status: false, message: 'Invalid item id', data: null });
-        }
         const { modelNumber, name, quantity, price, customer } = req.body;
-        if (!modelNumber || !name || quantity == null || price == null || !customer) {
-            return res.status(400).json({ status: false, message: 'Please provide all required fields', data: null });
-        }
         // التحقق من ملكية العنصر وتحديثه
         const item = await Item.findOneAndUpdate(
             { _id: req.params.id, customerId: req.customerId },

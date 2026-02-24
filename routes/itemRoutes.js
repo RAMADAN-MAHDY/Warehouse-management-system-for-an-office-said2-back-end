@@ -13,20 +13,22 @@ const {
     updateExpense,
     deleteExpense
 } = require('../controllers/itemController');
+const validate = require('../middleware/validateMiddleware');
+const { itemSchema, expenseSchema } = require('../validations/itemValidation');
 
 // تطبيق حماية JWT وعزل العميل على جميع المسارات
 router.use(protect, tenantMiddleware);
 
 router.get('/', getAllItems);
 router.get('/search', searchItems);
-router.post('/', addItem);
-router.put('/:id', updateItem);
+router.post('/', validate(itemSchema), addItem);
+router.put('/:id', validate(itemSchema), updateItem);
 router.delete('/:id', deleteItem);
 router.get('/export', exportToExcel);
 router.get('/download/:id', downloadExcel);
 
 // مصروفات
-router.put('/expenses/:id', updateExpense);
+router.put('/expenses/:id', validate(expenseSchema), updateExpense);
 router.delete('/expenses/:id', deleteExpense);
 
 module.exports = router;

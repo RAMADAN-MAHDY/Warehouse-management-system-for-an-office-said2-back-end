@@ -10,9 +10,7 @@ const generateToken = (id) => {
 exports.registerUser = async (req, res) => {
     try {
         const { username, password, companyName } = req.body;
-        if (!username || !password) {
-            return res.status(400).json({ status: false, message: 'Please provide username and password', data: null });
-        }
+
         const userExists = await User.findOne({ username });
         if (userExists) {
             return res.status(400).json({ status: false, message: 'Username already exists', data: null });
@@ -39,26 +37,7 @@ exports.registerUser = async (req, res) => {
 
 exports.loginUser = async (req, res) => {
     try {
-        let { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ status: false, message: 'Please provide username and password', data: null });
-        }
-        // تحقق من النوع
-        if (typeof username !== "string" || typeof password !== "string") {
-            return res.status(400).json({ status: false, message: "Invalid credentials" });
-        }
-        // تنظيف البيانات
-        username = username.trim().toLowerCase();
-        password = password.trim();
-        // تحقق من الطول
-        if (username.length < 3 || username.length > 30) {
-            return res.status(400).json({ status: false, message: "Invalid credentials" });
-        }
-        // تحقق من كلمة المرور
-        if (password.length < 6 || password.length > 120) {
-            return res.status(400).json({ status: false, message: "Invalid credentials" });
-        }
+        const { username, password } = req.body;
 
         const user = await User.findOne({ username }).select("+password");
         if (!user) {
