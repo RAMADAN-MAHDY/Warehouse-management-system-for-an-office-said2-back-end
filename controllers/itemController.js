@@ -108,7 +108,7 @@ exports.exportToExcel = async (req, res) => {
         const items = await Item.find({ customerId: req.customerId });
         const buffer = await exportExcel(items);
         const InvoiceFile = require('../models/InvoiceFile');
-        const invoiceFile = await InvoiceFile.create({ buffer });
+        const invoiceFile = await InvoiceFile.create({ buffer, customerId: req.customerId });
         res.status(200).json({ status: true, message: 'Exported to Excel', data: { id: invoiceFile._id } });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
@@ -119,8 +119,8 @@ exports.exportToExcel = async (req, res) => {
 exports.downloadExcel = async (req, res) => {
     try {
         const InvoiceFile = require('../models/InvoiceFile');
-        const file = await InvoiceFile.findById(req.params.id);
-        if (!file) return res.status(404).json({ status: false, message: 'File not found', data: null });
+        const file = await InvoiceFile.findOne({ _id: req.params.id, customerId: req.customerId });
+        if (!file) return res.status(404).json({ status: false, message: 'File not found or unauthorized', data: null });
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition': 'attachment; filename="invoices.xlsx"',

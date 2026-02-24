@@ -213,8 +213,10 @@ router.get('/sales', requireLogin, async (req, res) => {
 // عرض ملفات الإكسل المحفوظة
 router.get('/excel-files', requireLogin, async (req, res) => {
     try {
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
         const InvoiceFile = require('../models/InvoiceFile');
-        const files = await InvoiceFile.find().sort({ createdAt: -1 });
+        const files = await InvoiceFile.find({ customerId }).sort({ createdAt: -1 });
         res.render('excelFiles', { files, token: req.session.token });
     } catch (err) {
         console.error(err);
@@ -225,8 +227,10 @@ router.get('/excel-files', requireLogin, async (req, res) => {
 // حذف ملف إكسل
 router.post('/excel-files/delete/:id', requireLogin, async (req, res) => {
     try {
+        const customerId = await getCustomerIdFromSession(req);
+        if (!customerId) return res.redirect('/login');
         const InvoiceFile = require('../models/InvoiceFile');
-        await InvoiceFile.findByIdAndDelete(req.params.id);
+        await InvoiceFile.findOneAndDelete({ _id: req.params.id, customerId });
         res.redirect('/excel-files');
     } catch (err) {
         console.error(err);
