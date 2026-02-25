@@ -1,91 +1,98 @@
 <%- include('partials/header') %>
-<div class="container mx-auto p-0 lg:p-4">
-  <h2 class="text-3xl font-bold mb-6 text-center text-white">إدارة المشتريات</h2>
+    <div class="container mx-auto p-0 lg:p-4">
+        <h2 class="text-3xl font-bold mb-6 text-center text-white">إدارة المشتريات</h2>
+        <div class="glass p-6 rounded-lg shadow-lg mb-8">
+            <h3 class="text-2xl font-bold mb-4 text-white">اضافة مشتريات اخري</h3>
+            <form method="POST" action="/purchases/adjust" class="space-y-4">
+                <div>
+                    <label class="block mb-2 text-sm font-semibold text-gray-300">المبلغ</label>
+                    <input type="number" step="0.01" name="amount"
+                        class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+                        placeholder="أدخل المبلغ (+/-)" required>
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-semibold text-gray-300">المشتريات</label>
+                    <input type="text" name="reason"
+                        class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+                        placeholder="الاسم" required>
+                </div>
+                <button type="submit"
+                    class="bg-blue-600 text-white font-bold p-2 rounded-lg hover:bg-blue-700 transition-colors">حفظ</button>
+            </form>
+        </div>
 
- 
-
-    <div class="glass p-6 rounded-lg shadow-lg mb-8">
-    <h3 class="text-2xl font-bold mb-4 text-white">اضافة مشتريات اخري</h3>
-    <form method="POST" action="/purchases/adjust" class="space-y-4">
-      <div>
-        <label class="block mb-2 text-sm font-semibold text-gray-300">المبلغ</label>
-        <input type="number" step="0.01" name="amount" class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" placeholder="أدخل المبلغ (+/-)" required>
-      </div>
-      <div>
-        <label class="block mb-2 text-sm font-semibold text-gray-300">المشتريات</label>
-        <input type="text" name="reason" class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" placeholder="الاسم" required>
-      </div>
-      <button type="submit" class="bg-blue-600 text-white font-bold p-2 rounded-lg hover:bg-blue-700 transition-colors">حفظ</button>
-    </form>
-  </div>
-
-  <div class="glass p-6 rounded-lg shadow-lg">
-    <h3 class="text-2xl font-bold mb-4 text-white">المشتريات الحالية</h3>
-    <div class="overflow-x-auto">
-      <table class="w-full table-auto border-collapse">
-        <thead>
-          <tr class="bg-gray-800">
-            <th class="p-3 text-right">التاريخ</th>
-            <th class="p-3 text-right">الوصف</th>
-            <th class="p-3 text-right">المورد</th>
-            <th class="p-3 text-right">الكمية</th>
-            <th class="p-3 text-right">السعر</th>
-            <th class="p-3 text-right">الإجمالي</th>
-            <th class="p-3 text-right">إجراءات</th>
-          </tr>
-        </thead>
-        <tbody id="purchasesTable"></tbody>
-      </table>
+        <div class="glass p-6 rounded-lg shadow-lg">
+            <h3 class="text-2xl font-bold mb-4 text-white">المشتريات الحالية</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto border-collapse">
+                    <thead>
+                        <tr class="bg-gray-800">
+                            <th class="p-3 text-right">التاريخ</th>
+                            <th class="p-3 text-right">الوصف</th>
+                            <th class="p-3 text-right">المورد</th>
+                            <th class="p-3 text-right">الكمية</th>
+                            <th class="p-3 text-right">السعر</th>
+                            <th class="p-3 text-right">الإجمالي</th>
+                            <th class="p-3 text-right">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchasesTable"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
-  </div>
-</div>
-<script>
-const token = '<%= token %>';
-const purchasesTable = document.getElementById('purchasesTable');
-async function fetchPurchases(){
-  const res = await fetch('/api/purchases', { headers: { Authorization: 'Bearer ' + token }});
-  const data = await res.json();
-//   console.log(data);
-  purchasesTable.innerHTML = '';
-  if (data.status) {
-    data.data.forEach(p => {
-      const tr = document.createElement('tr');
-      tr.className = 'border-b border-gray-800 hover:bg-gray-700';
-      tr.setAttribute('data-id', p._id);
-      tr.innerHTML = `
-        <td class="p-3">${new Date(p.date || p.createdAt).toISOString().slice(0,10)}</td>
-        <td class="p-3">${p.description}</td>
-        <td class="p-3">${p.itemId?.customer || '-'}</td>
-        <td class="p-3">${Number(p.amount).toFixed(0) / p.itemId.price.toFixed(0) ?? "-" } </td>
-        <td class="p-3">${p.itemId?.price?.toFixed ? p.itemId.price.toFixed(2) : (p.itemId.price ?? '-')}</td>
+    <script>
+        const token = '<%= token %>';
+        const purchasesTable = document.getElementById('purchasesTable');
+        async function fetchPurchases() {
+            const res = await fetch('/api/purchases', { headers: { Authorization: 'Bearer ' + token } });
+            const data = await res.json();
+            //   console.log(data);
+            purchasesTable.innerHTML = '';
+            if (data.status) {
+                data.data.forEach(p => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-800 hover:bg-gray-700';
+                    tr.setAttribute('data-id', p._id);
+
+                    const quantity = (p.itemId && p.itemId.price) ? (Number(p.amount) / p.itemId.price).toFixed(0) : '-';
+                    const price = p.itemId?.price ? p.itemId.price.toFixed(2) : '-';
+                    const supplier = p.itemId?.customer || p.supplier || '-';
+
+                    tr.innerHTML = `
+        <td class="p-3">${new Date(p.date || p.createdAt).toISOString().slice(0, 10)}</td>
+        <td class="p-3">${p.description || p.reason || '-'}</td>
+        <td class="p-3">${supplier}</td>
+        <td class="p-3">${quantity}</td>
+        <td class="p-3">${price}</td>
         <td class="p-3 text-green-400 font-semibold">${Number(p.amount).toFixed(2)}</td>
         <td class="p-3 flex gap-2">
           <button class="deleteBtn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-xs font-semibold">حذف</button>
         </td>`;
-      purchasesTable.appendChild(tr);
-        //   <button class="editBtn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-semibold">تعديل</button>
-        // <td class="p-3">${p.itemId?.quantity ?? '-'}</td>
-    });
-    bindRowEvents();
-  }
-}
-function bindRowEvents(){
-  purchasesTable.querySelectorAll('.editBtn').forEach(btn=>{
-    // btn.onclick = () => { Swal.fire('ملاحظة','تمت إزالة نموذج التعديل.','info'); };
-  });
-  purchasesTable.querySelectorAll('.deleteBtn').forEach(btn=>{
-    btn.onclick = async () => {
-      const tr = btn.closest('tr'); const id = tr.getAttribute('data-id');
-      const ok = await Swal.fire({ title:'تأكيد', text:'هل تريد حذف هذا القيد؟ سيتم حفظ نسخة احتياطية.', icon:'warning', showCancelButton:true, confirmButtonText:'حذف', cancelButtonText:'إلغاء' });
-      if (ok.isConfirmed) {
-        const res = await fetch('/api/purchases/' + id, { method:'DELETE', headers:{ Authorization:'Bearer ' + token }});
-        const data = await res.json();
-        if (data.status) { tr.remove(); Swal.fire('تم الحذف','تم حذف القيد وحفظ نسخة احتياطية.','success'); }
-        else Swal.fire('خطأ', data.message || 'تعذر الحذف', 'error');
-      }
-    };
-  });
-}
-fetchPurchases();
-</script>
-<%- include('partials/footer') %>
+                    purchasesTable.appendChild(tr);
+                    //   <button class="editBtn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-semibold">تعديل</button>
+                    // <td class="p-3">${p.itemId?.quantity ?? '-'}</td>
+                });
+                bindRowEvents();
+            }
+        }
+        function bindRowEvents() {
+            purchasesTable.querySelectorAll('.editBtn').forEach(btn => {
+                // btn.onclick = () => { Swal.fire('ملاحظة','تمت إزالة نموذج التعديل.','info'); };
+            });
+            purchasesTable.querySelectorAll('.deleteBtn').forEach(btn => {
+                btn.onclick = async () => {
+                    const tr = btn.closest('tr'); const id = tr.getAttribute('data-id');
+                    const ok = await Swal.fire({ title: 'تأكيد', text: 'هل تريد حذف هذا القيد؟ سيتم حفظ نسخة احتياطية.', icon: 'warning', showCancelButton: true, confirmButtonText: 'حذف', cancelButtonText: 'إلغاء' });
+                    if (ok.isConfirmed) {
+                        const res = await fetch('/api/purchases/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+                        const data = await res.json();
+                        if (data.status) { tr.remove(); Swal.fire('تم الحذف', 'تم حذف القيد وحفظ نسخة احتياطية.', 'success'); }
+                        else Swal.fire('خطأ', data.message || 'تعذر الحذف', 'error');
+                    }
+                };
+            });
+        }
+        fetchPurchases();
+    </script>
+    <%- include('partials/footer') %>

@@ -28,6 +28,10 @@
   <div class="glass p-1 lg:p-6 rounded-lg shadow-lg mb-8">
     <h3 class="text-2xl font-bold mb-4 text-white">المشتريات</h3>
     <div class="overflow-x-auto">
+         <div class="glass p-3 rounded-lg shadow-lg flex flex-col justify-center items-center">
+                <h3 class="text-xl font-bold text-gray-300 mb-2">إجمالي المشتريات</h3>
+                <p id="totalPurchases" class="text-2xl font-bold text-green-400"> <%= totalPurchases.toFixed(2) %> ج.م</p>
+            </div>
       <table class="w-full table-auto border-collapse">
         <thead>
           <tr class="bg-gray-800">
@@ -60,6 +64,10 @@
   <div class="glass p-1 lg:p-6 rounded-lg shadow-lg">
     <h3 class="text-2xl font-bold mb-4 text-white">المصروفات</h3>
     <div class="overflow-x-auto">
+        <div class="glass p-3 rounded-lg shadow-lg flex flex-col justify-center items-center">
+                <h3 class="text-xl font-bold text-gray-300 mb-2">إجمالي المصروفات</h3>
+                <p id="totalExpenses" class="text-2xl font-bold text-green-400"> <%= totalExpenses.toFixed(2) %> ج.م</p>
+            </div>
       <table class="w-full table-auto border-collapse">
         <thead>
           <tr class="bg-gray-800">

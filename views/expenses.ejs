@@ -1,52 +1,82 @@
 <%- include('partials/header') %>
-<div class="container mx-auto p-0 sm:p-2 lg:p-4">
-    <div class="glass p-1 lg:p-6 rounded-lg shadow-lg">
-        <h2 class="text-3xl font-bold mb-6 text-center text-white">💸 المصروفات</h2>
+    <div class="container mx-auto p-0 sm:p-2 lg:p-4">
+        <div class="glass p-1 lg:p-6 rounded-lg shadow-lg">
+            <h2 class="text-3xl font-bold mb-6 text-center text-white">💸 المصروفات</h2>
 
-        <% if (typeof editExpense !== 'undefined' && editExpense) { %>
-        <form method="POST" action="/expenses/edit/<%= editExpense._id %>" class="mb-6 flex flex-wrap gap-4 items-center bg-gray-800/50 p-4 rounded-lg">
-            <input type="text" name="description" value="<%= editExpense.description %>" class="flex-grow bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" required>
-            <input type="number" name="amount" value="<%= editExpense.amount %>" class="w-full sm:w-1/4 bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" min="0" required>
-            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">حفظ التعديل</button>
-            <a href="/expenses" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">إلغاء</a>
-        </form>
-        <% } %>
+            <div class="glass p-6 rounded-lg shadow-lg flex flex-col justify-center items-center mb-8">
+                <h3 class="text-xl font-bold text-gray-300 mb-2">إجمالي المصروفات</h3>
+                <p class="text-4xl font-bold text-red-400">
+                    <%= totalExpenses.toFixed(2) %> ج.م
+                </p>
+            </div>
 
-        <form method="POST" action="/expenses/add" class="mb-6 flex flex-wrap gap-4 items-center">
-            <input type="text" name="description" placeholder="وصف المصروف" class="flex-grow bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" required>
-            <input type="number" name="amount" placeholder="المبلغ" class="w-full sm:w-1/4 bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" min="0" required>
-            <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">➕ إضافة</button>
-        </form>
-        <div class="overflow-x-auto">
-            <table class="w-full table-auto">
-                <thead class="bg-gray-800">
-                    <tr class="border-t-2 border-gray-700">
-                  
-                        <td colspan="2" class="text-right font-bold p-3 text-lg">الإجمالي:</td>
-                        <td class="font-bold text-red-400 p-3 text-lg"><%= totalExpenses %> ج.م</td>
-                        
-                    </tr>
-                    <tr>
-                        <th class="p-3 text-center">التاريخ</th>
-                        <th class="p-3 text-center">الوصف</th>
-                        <th class="p-3 text-center">المبلغ</th>
-                        <th class="p-3 text-center">العمليات</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% expenses.forEach(expense => { %>
-                    <tr class="border-b border-gray-800 hover:bg-gray-700">
-                        <td class="p-3 text-center">
-                            <% const date = new Date(expense.date); %>
-                            <%= date.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', hour12: true, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) %>
-                        </td>
-                        <td class="p-3 text-center"><%= expense.description %></td>
-                        <td class="p-3 text-center text-red-400 font-semibold"><%= expense.amount %> ج.م</td>
-                        <td class="p-3 text-center flex gap-2 justify-center">
-                            <form method="GET" action="/expenses/edit/<%= expense._id %>" class="inline">
-                                <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-blue-600 transition">تعديل</button>
-                            </form>
-                            <form method="POST" action="/expenses/delete/<%= expense._id %>" class="inline" onsubmit="event.preventDefault();
+            <% if (typeof editExpense !=='undefined' && editExpense) { %>
+                <form method="POST" action="/expenses/edit/<%= editExpense._id %>"
+                    class="mb-6 flex flex-wrap gap-4 items-center bg-gray-800/50 p-4 rounded-lg">
+                    <input type="text" name="description" value="<%= editExpense.description %>"
+                        class="flex-grow bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" required>
+                    <input type="number" name="amount" value="<%= editExpense.amount %>"
+                        class="w-full sm:w-1/4 bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" min="0"
+                        required>
+                    <button type="submit"
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">حفظ
+                        التعديل</button>
+                    <a href="/expenses"
+                        class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">إلغاء</a>
+                </form>
+                <% } %>
+
+                    <form method="POST" action="/expenses/add" class="mb-6 flex flex-wrap gap-4 items-center">
+                        <input type="text" name="description" placeholder="وصف المصروف"
+                            class="flex-grow bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" required>
+                        <input type="number" name="amount" placeholder="المبلغ"
+                            class="w-full sm:w-1/4 bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg" min="0"
+                            required>
+                        <button type="submit"
+                            class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">➕
+                            إضافة</button>
+                    </form>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto">
+                            <thead class="bg-gray-800">
+                                <tr class="border-t-2 border-gray-700">
+
+                                    <td colspan="2" class="text-right font-bold p-3 text-lg">الإجمالي:</td>
+                                    <td class="font-bold text-red-400 p-3 text-lg">
+                                        <%= totalExpenses %> ج.م
+                                    </td>
+
+                                </tr>
+                                <tr>
+                                    <th class="p-3 text-center">التاريخ</th>
+                                    <th class="p-3 text-center">الوصف</th>
+                                    <th class="p-3 text-center">المبلغ</th>
+                                    <th class="p-3 text-center">العمليات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% expenses.forEach(expense=> { %>
+                                    <tr class="border-b border-gray-800 hover:bg-gray-700">
+                                        <td class="p-3 text-center">
+                                            <% const date=new Date(expense.date); %>
+                                                <%= date.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' , hour12:
+                                                    true, year: 'numeric' , month: '2-digit' , day: '2-digit' ,
+                                                    hour: '2-digit' , minute: '2-digit' }) %>
+                                        </td>
+                                        <td class="p-3 text-center">
+                                            <%= expense.description %>
+                                        </td>
+                                        <td class="p-3 text-center text-red-400 font-semibold">
+                                            <%= expense.amount %> ج.م
+                                        </td>
+                                        <td class="p-3 text-center flex gap-2 justify-center">
+                                            <form method="GET" action="/expenses/edit/<%= expense._id %>"
+                                                class="inline">
+                                                <button type="submit"
+                                                    class="bg-blue-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-blue-600 transition">تعديل</button>
+                                            </form>
+                                            <form method="POST" action="/expenses/delete/<%= expense._id %>"
+                                                class="inline" onsubmit="event.preventDefault();
                                 Swal.fire({
                                     title: 'هل أنت متأكد؟',
                                     text: 'لن تتمكن من التراجع عن هذا!',
@@ -61,14 +91,15 @@
                                         this.submit();
                                     }
                                 });">
-                                <button type="submit" class="bg-red-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-red-600 transition">حذف</button>
-                            </form>
-                        </td>
-                    </tr>
-                    <% }) %>
-                </tbody>
-            </table>
+                                                <button type="submit"
+                                                    class="bg-red-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-red-600 transition">حذف</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
         </div>
     </div>
-</div>
-<%- include('partials/footer') %>
+    <%- include('partials/footer') %>

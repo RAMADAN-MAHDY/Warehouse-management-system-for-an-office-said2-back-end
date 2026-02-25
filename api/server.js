@@ -19,20 +19,9 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Middleware to ensure DB connection
-app.use(async (req, res, next) => {
-    try {
-        await connectDB();
-        next();
-    } catch (err) {
-        console.error('Database Connection Error:', err.message);
-        // Don't hang, return error if DB fails
-        if (req.path === '/api/health') return next(); // Let health check handle it
-        res.status(503).json({
-            status: false,
-            message: 'Database connection failed. Please check environment variables.'
-        });
-    }
+// Connect to Database immediately
+connectDB().catch(err => {
+    console.error('Initial Database Connection Error:', err.message);
 });
 
 // جلسات المستخدمين
