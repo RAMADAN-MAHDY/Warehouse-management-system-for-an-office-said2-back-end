@@ -138,6 +138,7 @@ app.use('/api/items', require('../routes/itemRoutes'));
 app.use('/api/auth', require('../routes/authRoutes'));
 app.use('/api/sales', require('../routes/saleRoutes'));
 app.use('/api/purchases', require('../routes/purchaseRoutes'));
+app.use('/api/expenses', require('../routes/expenseRoutes'));
 app.use('/api/reports', require('../routes/reportRoutes'));
 
 // The Sentry error handler must be before any other error middleware and after all controllers
