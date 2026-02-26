@@ -37,6 +37,7 @@ exports.searchItems = async (req, res) => {
             $or: [
                 { modelNumber: { $regex: q, $options: 'i' } },
                 { name: { $regex: q, $options: 'i' } },
+                { customer: { $regex: q, $options: 'i' } },
             ],
         });
         res.status(200).json({ status: true, message: 'Search results', data: items });
