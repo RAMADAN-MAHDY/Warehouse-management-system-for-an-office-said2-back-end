@@ -96,20 +96,25 @@ if (NODE_ENV !== 'test') {
 }
 
 // جلسات المستخدمين
-app.use(session({
+const sessionConfig = {
     secret: JWT_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: MONGO_URI,
-        ttl: 24 * 60 * 60, // يوم كامل
-    }),
     cookie: {
         secure: NODE_ENV === 'production',
-        sameSite: NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: 24 * 60 * 60 * 1000,
-    },
-}));
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+};
+
+// Use MongoStore only if not in test environment or if we want persistent sessions in tests
+if (NODE_ENV !== 'test') {
+    sessionConfig.store = MongoStore.create({
+        mongoUrl: MONGO_URI,
+    });
+}
+
+app.use(session(sessionConfig));
 
 // إعداد EJS و static
 app.set('view engine', 'ejs');
