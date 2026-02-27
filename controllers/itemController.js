@@ -107,12 +107,41 @@ exports.updateItem = async (req, res) => {
 exports.exportToExcel = async (req, res) => {
     try {
         const items = await Item.find({ customerId: req.customerId });
-        const buffer = await exportExcel(items);
+        
+        if (!items || items.length === 0) {
+            return res.status(404).json({ status: false, message: 'لا توجد بيانات لتصديرها' });
+        }
+
+        // Prepare data for Excel
+        const data = items.map(item => ({
+            'اسم الصنف': item.name || 'N/A',
+            'رقم الموديل': item.modelNumber || 'N/A',
+            'الكمية': item.quantity || 0,
+            'السعر': item.price || 0,
+            'اسم العميل': item.customer || 'N/A',
+            'تاريخ الإضافة': item.createdAt ? item.createdAt.toISOString().slice(0, 10) : ''
+        }));
+
+        const buffer = exportExcel(data, 'المخزون');
         const InvoiceFile = require('../models/InvoiceFile');
-        const invoiceFile = await InvoiceFile.create({ buffer, customerId: req.customerId });
-        res.status(200).json({ status: true, message: 'Exported to Excel', data: { id: invoiceFile._id } });
+        
+        try {
+            await InvoiceFile.create({ 
+                buffer, 
+                customerId: req.customerId,
+                createdAt: new Date()
+            });
+        } catch (dbError) {
+            console.error('Error saving InvoiceFile to DB:', dbError);
+            // We continue even if saving to DB fails, to let the user download the file
+        }
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=inventory.xlsx');
+        res.send(buffer);
     } catch (error) {
-        res.status(500).json({ status: false, message: error.message, data: null });
+        console.error('Export Excel Error:', error);
+        res.status(500).json({ status: false, message: error.message });
     }
 };
 

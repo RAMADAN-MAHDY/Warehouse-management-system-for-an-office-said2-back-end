@@ -12,28 +12,32 @@ exports.getProfitSummary = async (req, res) => {
             { $group: { _id: null, total: { $sum: "$amount" } } }
         ]);
 
+        // حساب إجمالي المبيعات
         const totalSales = await SaleInvoice.aggregate([
             { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: "$total" } } }
         ]);
 
+        // حساب إجمالي تكلفة الشراء
         const totalCOGS = await SaleInvoice.aggregate([
             { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
         ]);
 
+        // حساب إجمالي التكاليف او المصروفات
         const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 });
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
+        // حساب إجمالي الأرباح
         const netProfit = (totalSales[0]?.total || 0) - (totalCOGS[0]?.total || 0) - totalExpenses;
 
         res.render('profit', {
-            purchases,
+            // purchases,
             totalPurchases: totalPurchasesAgg[0]?.total || 0, // Keep for display if needed, but not for netProfit
             totalSales: totalSales[0]?.total || 0,
             totalCOGS: totalCOGS[0]?.total || 0,
             netProfit,
-            expenses,
+            // expenses,
             totalExpenses,
             token: req.session.token // إضافة الرمز المميز هنا
         });

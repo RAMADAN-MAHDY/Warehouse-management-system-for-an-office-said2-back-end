@@ -1,5 +1,49 @@
 const SaleInvoice = require('../models/SaleInvoice');
 const Item = require('../models/Item');
+const exportExcel = require('../utils/exportExcel');
+const InvoiceFile = require('../models/InvoiceFile');
+
+exports.exportSalesToExcel = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        let filter = { customerId: req.customerId };
+
+        if (from || to) {
+            const start = from ? new Date(from) : new Date('1970-01-01');
+            const end = to ? new Date(to) : new Date();
+            end.setHours(23, 59, 59, 999); // End of day
+            filter.createdAt = { $gte: start, $lte: end };
+        }
+
+        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 });
+
+        const data = sales.map(sale => ({
+            'رقم الفاتورة': sale._id.toString(),
+            'التاريخ': sale.createdAt ? sale.createdAt.toISOString().slice(0, 10) : '',
+            'اسم العميل': sale.sellerName || 'N/A',
+            'المنتج': sale.name,
+            'الموديل': sale.modelNumber,
+            'الكمية': sale.quantity,
+            'السعر': sale.price,
+            'الإجمالي': sale.total
+        }));
+
+        const buffer = exportExcel(data, 'فواتير المبيعات');
+
+        // حفظ نسخة في قاعدة البيانات للرجوع إليها لاحقاً
+        await InvoiceFile.create({
+            customerId: req.customerId,
+            buffer: buffer,
+            createdAt: new Date()
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=sales-report.xlsx');
+        res.send(buffer);
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message });
+    }
+};
 
 exports.addSaleInvoice = async (req, res) => {
     try {
