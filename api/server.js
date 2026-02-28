@@ -1,6 +1,4 @@
 const express = require('express');
-const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const connectDB = require('../config/db');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -11,6 +9,9 @@ const morgan = require('morgan');
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require('@sentry/profiling-node');
 const { validateEnv, MONGO_URI, JWT_SECRET, NODE_ENV, PORT, CORS_ORIGIN, SENTRY_DSN } = require('../config/env');
+const protect = require('../middleware/protectMiddleware');
+const tenantMiddleware = require('../middleware/tenantMiddleware');
+const { getProfitSummaryJson } = require('../controllers/reportController');
 
 // Validate environment variables immediately
 validateEnv();
@@ -95,31 +96,6 @@ if (NODE_ENV !== 'test') {
     });
 }
 
-// جلسات المستخدمين
-const sessionConfig = {
-    secret: JWT_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-};
-
-// Use MongoStore only if not in test environment or if we want persistent sessions in tests
-if (NODE_ENV !== 'test') {
-    sessionConfig.store = MongoStore.create({
-        mongoUrl: MONGO_URI,
-    });
-}
-
-app.use(session(sessionConfig));
-
-// إعداد EJS و static
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, '../views'));
-app.use(express.static(path.join(__dirname, '../public')));
 app.set('trust proxy', 1);
 
 // مسار فحص الصحة (Health Check)
@@ -133,7 +109,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // المسارات
-app.use('/', require('../routes/webRoutes'));
+app.get('/api/profit', protect, tenantMiddleware, getProfitSummaryJson);
 app.use('/api/items', require('../routes/itemRoutes'));
 app.use('/api/auth', require('../routes/authRoutes'));
 app.use('/api/sales', require('../routes/saleRoutes'));

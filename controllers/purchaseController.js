@@ -101,6 +101,24 @@ exports.update = async (req, res) => {
     }
 };
 
+exports.addPurchaseAdjustmentApi = async (req, res) => {
+    try {
+        const { amount, reason } = req.body;
+        const val = amount; // Already a number due to Joi validation
+        const doc = await Purchase.create({
+            customerId: req.customerId,
+            description: reason || 'تعديل يدوي لإجمالي المشتريات',
+            amount: val,
+            type: 'adjustment',
+            reason: reason || ''
+        });
+        return res.status(201).json({ status: true, message: 'تم إضافة التعديل', data: doc });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: false, message: 'خطأ في إضافة التعديل' });
+    }
+};
+
 exports.remove = async (req, res) => {
     try {
         const { id } = req.params;

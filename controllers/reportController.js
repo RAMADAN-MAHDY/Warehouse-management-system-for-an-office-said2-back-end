@@ -64,6 +64,47 @@ exports.getSummary = async (req, res) => {
     }
 };
 
+exports.getProfitSummaryJson = async (req, res) => {
+    try {
+        const cid = req.customerId;
+        const purchases = await Purchase.find({ customerId: cid }).sort({ date: -1 }).limit(100);
+        const totalPurchasesAgg = await Purchase.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]);
+        const totalSales = await SaleInvoice.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: "$total" } } }
+        ]);
+
+        const totalCOGS = await SaleInvoice.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+        ]);
+
+        const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 });
+        const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+        const netProfit = (totalSales[0]?.total || 0) - (totalCOGS[0]?.total || 0) - totalExpenses;
+
+        res.json({
+            status: true,
+            data: {
+                totalPurchases: totalPurchasesAgg[0]?.total || 0,
+                totalSales: totalSales[0]?.total || 0,
+                totalCOGS: totalCOGS[0]?.total || 0,
+                netProfit,
+                totalExpenses,
+                // purchases,
+                // expenses
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: false, message: 'خطأ في جلب البيانات' });
+    }
+};
+
 /**
  * تقرير المبيعات مع فلاتر تاريخية
  * GET /api/reports/sales?from=2024-01-01&to=2024-12-31&page=1&limit=50

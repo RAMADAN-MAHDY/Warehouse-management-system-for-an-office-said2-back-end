@@ -1,7 +1,0 @@
-/* Simple spinner for loading indicators */
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
