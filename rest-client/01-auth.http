@@ -7,7 +7,7 @@
 ###  3. انسخ التوكن من الرد وضعه في @token
 ### ======================================================
 
-@baseUrl = http://localhost:5000
+@baseUrl = https://warehouse-management-system-for-an.vercel.app/
 
 ### ✅ TEST 1: تسجيل مستخدم جديد (tenant1)
 ### الرد المتوقع: { status: true, customerId: "CUST-XXXXXXXX", token: "..." }

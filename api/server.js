@@ -1,115 +1,176 @@
 const express = require('express');
 const connectDB = require('../config/db');
 const cors = require('cors');
-const bodyParser = require('body-parser');
-const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const compression = require('compression');
+const hpp = require('hpp');
+const mongoose = require('mongoose');
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require('@sentry/profiling-node');
-const { validateEnv, MONGO_URI, JWT_SECRET, NODE_ENV, PORT, CORS_ORIGIN, SENTRY_DSN } = require('../config/env');
+
+const {
+  validateEnv,
+  MONGO_URI,
+  NODE_ENV,
+  PORT,
+  CORS_ORIGIN,
+  SENTRY_DSN
+} = require('../config/env');
+
 const protect = require('../middleware/protectMiddleware');
 const tenantMiddleware = require('../middleware/tenantMiddleware');
 const { getProfitSummaryJson } = require('../controllers/reportController');
 
-// Validate environment variables immediately
 validateEnv();
 
 const app = express();
 
-// Initialize Sentry
-if (SENTRY_DSN) {
-    Sentry.init({
-        dsn: SENTRY_DSN,
-        integrations: [
-            nodeProfilingIntegration(),
-        ],
-        // Performance Monitoring
-        tracesSampleRate: 1.0, //  Capture 100% of the transactions
-        // Set sampling rate for profiling - this is relative to tracesSampleRate
-        profilesSampleRate: 1.0,
-        environment: NODE_ENV
-    });
-}
-
-// Request logging
-app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
-
-// The Sentry request handler must be the first middleware on the app
-if (SENTRY_DSN) {
-    app.use(Sentry.Handlers.requestHandler());
-    // TracingHandler creates a trace for every incoming request
-    app.use(Sentry.Handlers.tracingHandler());
-}
-
-// Security Middlewares
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
-            imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com"],
-            connectSrc: ["'self'", "https://sentry.io", "https://cdn.jsdelivr.net"],
-            fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            mediaSrc: ["'self'", "data:"],
-            objectSrc: ["'none'"],
-            upgradeInsecureRequests: [],
-        },
-    },
-})); // Sets various HTTP headers for security with custom CSP
-
-// Rate Limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { status: false, message: 'Too many requests from this IP, please try again after 15 minutes' }
-});
-app.use('/api/', limiter);
-
-// CORS configuration with allowlist
-const corsOptions = {
-    origin: (origin, callback) => {
-        const allowlist = CORS_ORIGIN.split(',').map(item => item.trim());
-        if (!origin || allowlist.indexOf(origin) !== -1 || allowlist.includes('*')) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-};
-app.use(cors(corsOptions));
-
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Connect to Database only if not in test environment
-if (NODE_ENV !== 'test') {
-    connectDB().catch(err => {
-        console.error('Initial Database Connection Error:', err.message);
-    });
-}
-
 app.set('trust proxy', 1);
 
-// مسار فحص الصحة (Health Check)
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        environment: NODE_ENV,
-        db_connected: !!MONGO_URI,
-        timestamp: new Date().toISOString()
-    });
+/* ===========================
+   SENTRY INITIALIZATION
+=========================== */
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    integrations: [nodeProfilingIntegration()],
+    tracesSampleRate: NODE_ENV === 'production' ? 0.2 : 1.0,
+    profilesSampleRate: NODE_ENV === 'production' ? 0.1 : 1.0,
+    environment: NODE_ENV,
+  });
+
+  app.use(Sentry.Handlers.requestHandler());
+  app.use(Sentry.Handlers.tracingHandler());
+}
+
+/* ===========================
+   LOGGING
+=========================== */
+app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+/* ===========================
+   SECURITY MIDDLEWARES
+=========================== */
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+        styleSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com"],
+        connectSrc: ["'self'", "https://sentry.io"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+  })
+);
+
+app.use(hpp());
+app.use(compression());
+
+/* ===========================
+   RATE LIMITING
+=========================== */
+
+// Auth endpoints – حماية أقوى
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// المسارات
+// باقي API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
+
+/* ===========================
+   CORS (Production Ready)
+=========================== */
+
+const normalizeOrigin = (origin) => origin?.replace(/\/$/, '');
+
+const envAllowlist = (CORS_ORIGIN || '')
+  .split(',')
+  .map((item) => normalizeOrigin(item.trim()))
+  .filter(Boolean);
+
+const STATIC_ALLOWED_ORIGINS = [
+  'https://warehouse-management-system-for-an-sooty.vercel.app'
+];
+
+const allowlist = new Set([
+  ...envAllowlist,
+  ...STATIC_ALLOWED_ORIGINS.map(normalizeOrigin),
+]);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // Postman / Server-side
+
+      const normalizedOrigin = normalizeOrigin(origin);
+
+      if (allowlist.has(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      console.warn(`Blocked CORS origin: ${origin}`);
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  })
+);
+
+/* ===========================
+   BODY PARSING
+=========================== */
+
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+/* ===========================
+   DATABASE CONNECTION (Cached for Serverless)
+=========================== */
+
+if (NODE_ENV !== 'test') {
+  if (!global._mongoose) {
+    global._mongoose = connectDB();
+  }
+}
+
+/* ===========================
+   HEALTH CHECK
+=========================== */
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    environment: NODE_ENV,
+    db_connected: mongoose.connection.readyState === 1,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/* ===========================
+   ROUTES
+=========================== */
+
 app.get('/api/profit', protect, tenantMiddleware, getProfitSummaryJson);
+
 app.use('/api/items', require('../routes/itemRoutes'));
 app.use('/api/auth', require('../routes/authRoutes'));
 app.use('/api/sales', require('../routes/saleRoutes'));
@@ -118,32 +179,43 @@ app.use('/api/expenses', require('../routes/expenseRoutes'));
 app.use('/api/excel-files', require('../routes/excelRoutes'));
 app.use('/api/reports', require('../routes/reportRoutes'));
 
-// The Sentry error handler must be before any other error middleware and after all controllers
+/* ===========================
+   ERROR HANDLING
+=========================== */
+
 if (SENTRY_DSN) {
-    app.use(Sentry.Handlers.errorHandler());
+  app.use(Sentry.Handlers.errorHandler());
 }
 
-// معالجة الأخطاء
 app.use((err, req, res, next) => {
-    // If Sentry is not initialized, we still want to log the error
-    if (!SENTRY_DSN) {
-        console.error('Server Error:', err);
-    }
-    
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ 
-        status: false, 
-        message: NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
-        ...(NODE_ENV !== 'production' && { stack: err.stack })
-    });
+  if (!SENTRY_DSN) {
+    console.error(err);
+  }
+
+  const statusCode = err.status || 500;
+
+  res.status(statusCode).json({
+    status: false,
+    message:
+      NODE_ENV === 'production'
+        ? 'Internal Server Error'
+        : err.message,
+    ...(NODE_ENV !== 'production' && { stack: err.stack }),
+  });
 });
 
-// ✅ Vercel handles the express app directly
+/* ===========================
+   EXPORT (Vercel Compatible)
+=========================== */
+
 module.exports = app;
 
-// ✅ إضافة مستمع في وضع التطوير فقط
+/* ===========================
+   DEV LISTENER ONLY
+=========================== */
+
 if (NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`Server running in development mode on http://localhost:${PORT}`);
-    });
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
 }
