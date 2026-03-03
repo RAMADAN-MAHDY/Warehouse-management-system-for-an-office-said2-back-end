@@ -53,23 +53,7 @@ app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
 /* ===========================
    SECURITY MIDDLEWARES
 =========================== */
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
-        styleSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com"],
-        connectSrc: ["'self'", "https://sentry.io"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-    },
-  })
-);
-
+app.use(helmet());
 app.use(hpp());
 app.use(compression());
 
