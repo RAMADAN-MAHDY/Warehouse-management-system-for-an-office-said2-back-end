@@ -92,7 +92,9 @@ const envAllowlist = (CORS_ORIGIN || '')
   .filter(Boolean);
 
 const STATIC_ALLOWED_ORIGINS = [
-  'https://warehouse-management-system-for-an-sooty.vercel.app'
+  'https://warehouse-management-system-for-an-sooty.vercel.app',
+  'http://localhost:3000',
+  'http://192.168.1.6:3000'
 ];
 
 const allowlist = new Set([

@@ -29,7 +29,21 @@ const bulkDeleteSchema = Joi.object({
     })
 });
 
+const updateSaleSchema = Joi.object({
+    quantity: Joi.number().min(0).max(1000000).required().messages({
+        'number.base': 'Quantity must be a number',
+        'number.min': 'Quantity cannot be negative',
+        'number.max': 'Quantity cannot exceed 1,000,000'
+    }),
+    price: Joi.number().min(0).max(10000000).required().messages({
+        'number.base': 'Price must be a number',
+        'number.min': 'Price cannot be negative',
+        'number.max': 'Price cannot exceed 10,000,000'
+    })
+});
+
 module.exports = {
     saleSchema,
+    updateSaleSchema,
     bulkDeleteSchema
 };
