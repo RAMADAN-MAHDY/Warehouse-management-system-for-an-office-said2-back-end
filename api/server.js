@@ -23,6 +23,9 @@ const protect = require('../middleware/protectMiddleware');
 const tenantMiddleware = require('../middleware/tenantMiddleware');
 const { getProfitSummaryJson } = require('../controllers/reportController');
 const seedPlans = require('../scripts/seedPlans');
+const { checkSubscription } = require('../middleware/subscriptionMiddleware');
+
+
 
 validateEnv();
 
@@ -159,15 +162,17 @@ app.get('/api/health', (req, res) => {
    ROUTES
 =========================== */
 
-app.get('/api/profit', protect, tenantMiddleware, getProfitSummaryJson);
+app.get('/api/profit', protect, tenantMiddleware, checkSubscription, getProfitSummaryJson);
 
-app.use('/api/items', require('../routes/itemRoutes'));
+app.use('/api/items', protect, tenantMiddleware, checkSubscription, require('../routes/itemRoutes'));
 app.use('/api/auth', require('../routes/authRoutes'));
-app.use('/api/sales', require('../routes/saleRoutes'));
-app.use('/api/purchases', require('../routes/purchaseRoutes'));
-app.use('/api/expenses', require('../routes/expenseRoutes'));
-app.use('/api/excel-files', require('../routes/excelRoutes'));
-app.use('/api/reports', require('../routes/reportRoutes'));
+app.use('/api/sales', protect, tenantMiddleware, checkSubscription, require('../routes/saleRoutes'));
+app.use('/api/purchases', protect, tenantMiddleware, checkSubscription, require('../routes/purchaseRoutes'));
+app.use('/api/expenses', protect, tenantMiddleware, checkSubscription, require('../routes/expenseRoutes'));
+app.use('/api/excel-files', protect, tenantMiddleware, checkSubscription, require('../routes/excelRoutes'));
+app.use('/api/reports', protect, tenantMiddleware, checkSubscription, require('../routes/reportRoutes'));
+
+
 app.use('/api/subscription', require('../routes/subscriptionRoutes'));
 app.use('/api/superadmin', require('../routes/superadminRoutes'));
 

@@ -43,8 +43,12 @@ const subscriptionSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // تحديث حالة الاشتراك تلقائياً عند الاستعلام
+// تحديث حالة الاشتراك تلقائياً عند الاستعلام
+// تم تعطيله لصالح التحقق في Middleware لضمان ظهور رسائل واضحة للعميل
+/*
 subscriptionSchema.pre('find', function() {
     this.where({ endDate: { $gte: new Date() } });
 });
+*/
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);
