@@ -40,13 +40,23 @@ exports.registerUser = async (req, res) => {
             }
         });
 
+        const token = generateToken(user._id);
+
+        // ضبط توكن في كوكيز (HttpOnly) للأمان
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
         return res.status(201).json({
             status: true,
             message: 'User registered successfully',
             data: {
                 user: user.toJSON(),
                 customerId,
-                token: generateToken(user._id)
+                // لم نعد نرسل التوكن في الجسم لزيادة الأمان
             }
         });
     } catch (error) {
@@ -67,13 +77,23 @@ exports.loginUser = async (req, res) => {
             return res.status(400).json({ status: false, message: 'Invalid credentials', data: null });
         }
 
+        const token = generateToken(user._id);
+
+        // ضبط توكن في كوكيز (HttpOnly) للأمان
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
         return res.status(200).json({
             status: true,
             message: 'Login successful',
             data: {
                 user: user.toJSON(),
                 customerId: user.customerId,
-                token: generateToken(user._id)
+                // لم نعد نرسل التوكن في الجسم لزيادة الأمان
             }
         });
     } catch (error) {
@@ -94,4 +114,13 @@ exports.getMe = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message, data: null });
     }
+};
+
+exports.logoutUser = async (req, res) => {
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+    });
+    res.json({ status: true, message: 'Logged out successfully' });
 };

@@ -9,6 +9,7 @@ const hpp = require('hpp');
 const mongoose = require('mongoose');
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require('@sentry/profiling-node');
+const cookieParser = require('cookie-parser');
 
 const {
   validateEnv,
@@ -130,6 +131,7 @@ app.use(
 
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser());
 
 /* ===========================
    DATABASE CONNECTION (Cached for Serverless)
