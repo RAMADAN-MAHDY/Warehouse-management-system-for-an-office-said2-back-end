@@ -21,7 +21,7 @@ exports.registerUser = async (req, res) => {
         // توليد معرف عميل فريد
         const customerId = await generateUniqueCustomerId(User);
 
-        const user = await User.create({ username, password, customerId, companyName: companyName || '', role: role || 'admin' });
+        const user = await User.create({ username, password, customerId, companyName: companyName || '', role:'admin' });
 
         // إنشاء اشتراك تجريبي مجاني لمدة شهر
         const endDate = new Date();
