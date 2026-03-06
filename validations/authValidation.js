@@ -12,8 +12,6 @@ const registerSchema = Joi.object({
     }),
     companyName: Joi.string().trim().max(100).allow('').default('').messages({
         'string.max': 'Company name cannot exceed 100 characters'
-    }),
-    role: Joi.string().valid('superadmin', 'admin', 'viewer' , 'editor').messages({
     })
 });
 

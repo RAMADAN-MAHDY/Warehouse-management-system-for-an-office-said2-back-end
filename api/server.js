@@ -212,7 +212,7 @@ module.exports = app;
    DEV LISTENER ONLY
 =========================== */
 
-if (NODE_ENV !== 'production') {
+if (NODE_ENV === 'development') {
   app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
   });

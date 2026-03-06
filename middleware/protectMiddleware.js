@@ -25,7 +25,6 @@ const protectMiddleware = async (req, res, next) => {
 
         // نقل customerId إلى req مباشرةً لسهولة الوصول
         req.customerId = req.user.customerId;
-        console.log('Protect Middleware: req.customerId set to', req.customerId); // إضافة سجل هنا
         next();
     } catch (error) {
         return res.status(401).json({ status: false, message: 'Not authorized, token failed', data: null });
