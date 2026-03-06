@@ -15,6 +15,7 @@ const {
     deletePlan,
     getAllTransactions,
     getAuditLogs,
+    deleteAuditLogs,
     exportUsersExcel,
     exportTransactionsExcel,
     updateUserSubscription
@@ -47,5 +48,6 @@ router.get('/transactions', getAllTransactions);
 router.post('/transactions/:transactionId/approve', approveTransaction);
 router.post('/transactions/:transactionId/reject', rejectTransaction);
 router.get('/audit-logs', getAuditLogs);
+router.post('/audit-logs/bulk-delete', deleteAuditLogs);
 
 module.exports = router;

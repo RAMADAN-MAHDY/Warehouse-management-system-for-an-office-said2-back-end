@@ -458,3 +458,18 @@ exports.getAuditLogs = async (req, res) => {
         res.status(500).json({ status: false, message: error.message });
     }
 };
+
+exports.deleteAuditLogs = async (req, res) => {
+    try {
+        const { logIds } = req.body;
+        if (!logIds || !Array.isArray(logIds)) {
+            return res.status(400).json({ status: false, message: 'Invalid log IDs provided' });
+        }
+
+        await AuditLog.deleteMany({ _id: { $in: logIds } });
+
+        res.json({ status: true, message: 'تم حذف سجلات التدقيق بنجاح' });
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message });
+    }
+};
