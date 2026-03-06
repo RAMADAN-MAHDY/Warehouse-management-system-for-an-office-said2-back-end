@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Subscription = require('../models/Subscription');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { generateUniqueCustomerId } = require('../utils/generateCustomerId');
@@ -9,8 +10,9 @@ const generateToken = (id) => {
 
 exports.registerUser = async (req, res) => {
     try {
-        const { username, password, companyName } = req.body;
-
+        const { username, password, companyName ,role } = req.body;
+// console.log("----------------------------------------------");
+// console.log(role);
         const userExists = await User.findOne({ username });
         if (userExists) {
             return res.status(400).json({ status: false, message: 'Username already exists', data: null });
@@ -19,7 +21,24 @@ exports.registerUser = async (req, res) => {
         // توليد معرف عميل فريد
         const customerId = await generateUniqueCustomerId(User);
 
-        const user = await User.create({ username, password, customerId, companyName: companyName || '' });
+        const user = await User.create({ username, password, customerId, companyName: companyName || '', role: role || 'admin' });
+
+        // إنشاء اشتراك تجريبي مجاني لمدة شهر
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + 30);
+
+        await Subscription.create({
+            customerId,
+            planType: 'free',
+            status: 'active',
+            startDate: new Date(),
+            endDate,
+            limits: {
+                maxItems: 200, // منح صلاحيات احترافية مؤقتاً
+                maxSales: 200,
+                maxExpenses: 200
+            }
+        });
 
         return res.status(201).json({
             status: true,

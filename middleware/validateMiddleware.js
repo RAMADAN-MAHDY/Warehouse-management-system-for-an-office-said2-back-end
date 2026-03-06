@@ -5,6 +5,8 @@
  */
 const validate = (schema, property = 'body') => {
     return (req, res, next) => {
+        // console.log("----------------------------------------------");
+        // console.log(req[property]);
         const { error, value } = schema.validate(req[property], {
             abortEarly: false, // Return all errors, not just the first one
             stripUnknown: true, // Remove fields that are not in the schema
@@ -26,6 +28,8 @@ const validate = (schema, property = 'body') => {
 
         // Replace req property with the validated and stripped value
         req[property] = value;
+        // console.log("----------------------------------------------");
+        // console.log(req[property]);
         next();
     };
 };

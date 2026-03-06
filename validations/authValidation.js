@@ -10,7 +10,11 @@ const registerSchema = Joi.object({
         'string.empty': 'Password is required',
         'string.min': 'Password must be at least 6 characters'
     }),
-    companyName: Joi.string().trim().max(100).allow('').default('')
+    companyName: Joi.string().trim().max(100).allow('').default('').messages({
+        'string.max': 'Company name cannot exceed 100 characters'
+    }),
+    role: Joi.string().valid('superadmin', 'admin', 'viewer' , 'editor').messages({
+    })
 });
 
 const loginSchema = Joi.object({

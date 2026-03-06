@@ -7,7 +7,7 @@
 ###  3. انسخ التوكن من الرد وضعه في @token
 ### ======================================================
 
-@baseUrl = https://warehouse-management-system-for-an.vercel.app/
+@baseUrl = http://localhost:5000
 
 ### ✅ TEST 1: تسجيل مستخدم جديد (tenant1)
 ### الرد المتوقع: { status: true, customerId: "CUST-XXXXXXXX", token: "..." }
@@ -16,9 +16,10 @@ POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
 
 {
-  "username": "admin",
+  "username": "superadmin5",
   "password": "123456789rR@",
-  "companyName": "شركة الأولى للتجارة"
+  "companyName": "شركة الأولى للتجارة",
+  "role": "superadmin"
 }
 
 ###
@@ -42,8 +43,8 @@ POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "username": "tenant1_test",
-  "password": "password123"
+   "username": "superadmin5",
+  "password": "123456789rR@"
 }
 
 ###

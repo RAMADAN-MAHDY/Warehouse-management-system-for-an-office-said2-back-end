@@ -18,6 +18,11 @@ const protectMiddleware = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = await User.findById(decoded.id).select('-password');
         if (!req.user) throw new Error('User not found');
+        
+        if (req.user.isBanned) {
+            return res.status(403).json({ status: false, message: 'تم حظر حسابك. يرجى التواصل مع الإدارة.', data: null });
+        }
+
         // نقل customerId إلى req مباشرةً لسهولة الوصول
         req.customerId = req.user.customerId;
         console.log('Protect Middleware: req.customerId set to', req.customerId); // إضافة سجل هنا

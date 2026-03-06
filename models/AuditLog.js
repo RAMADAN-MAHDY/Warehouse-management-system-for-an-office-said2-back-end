@@ -7,9 +7,15 @@ const schema = new mongoose.Schema({
         required: true
     },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    action: { type: String, enum: ['create', 'update', 'delete'] },
-    purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Purchase' },
-    changes: { type: Object },
+    action: { 
+        type: String, 
+        required: true 
+        // Removing enum for more flexibility as the system grows
+    },
+    details: { type: Object }, // To store action-specific details
+    changes: { type: Object }, // To store old/new values
+    ipAddress: { type: String },
+    performedBy: { type: String }, // Username of the admin or user
     at: { type: Date, default: Date.now }
 }, { timestamps: true });
 

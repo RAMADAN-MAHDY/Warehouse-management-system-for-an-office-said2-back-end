@@ -22,6 +22,7 @@ const {
 const protect = require('../middleware/protectMiddleware');
 const tenantMiddleware = require('../middleware/tenantMiddleware');
 const { getProfitSummaryJson } = require('../controllers/reportController');
+const seedPlans = require('../scripts/seedPlans');
 
 validateEnv();
 
@@ -133,7 +134,10 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 if (NODE_ENV !== 'test') {
   if (!global._mongoose) {
-    global._mongoose = connectDB();
+    global._mongoose = connectDB().then(() => {
+      // Seed plans after successful connection
+    //   seedPlans();
+    });
   }
 }
 
@@ -164,6 +168,9 @@ app.use('/api/purchases', require('../routes/purchaseRoutes'));
 app.use('/api/expenses', require('../routes/expenseRoutes'));
 app.use('/api/excel-files', require('../routes/excelRoutes'));
 app.use('/api/reports', require('../routes/reportRoutes'));
+app.use('/api/subscription', require('../routes/subscriptionRoutes'));
+app.use('/api/superadmin', require('../routes/superadminRoutes'));
+
 
 /* ===========================
    ERROR HANDLING

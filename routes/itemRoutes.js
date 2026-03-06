@@ -16,12 +16,15 @@ const {
 const validate = require('../middleware/validateMiddleware');
 const { itemSchema, expenseSchema } = require('../validations/itemValidation');
 
+const { checkSubscription, checkLimit } = require('../middleware/subscriptionMiddleware');
+
 // تطبيق حماية JWT وعزل العميل على جميع المسارات
 router.use(protect, tenantMiddleware);
+router.use(checkSubscription);
 
 router.get('/', getAllItems);
 router.get('/search', searchItems);
-router.post('/', validate(itemSchema), addItem);
+router.post('/', checkLimit('items'), validate(itemSchema), addItem);
 router.put('/:id', validate(itemSchema), updateItem);
 router.delete('/:id', deleteItem);
 router.get('/export', exportToExcel);

@@ -13,11 +13,14 @@ const {
 const validate = require('../middleware/validateMiddleware');
 const { saleSchema, updateSaleSchema, bulkDeleteSchema } = require('../validations/saleValidation');
 
+const { checkSubscription, checkLimit } = require('../middleware/subscriptionMiddleware');
+
 // تطبيق حماية JWT وعزل العميل على جميع المسارات
 router.use(protect, tenantMiddleware);
+router.use(checkSubscription);
 
 router.get('/export', exportSalesToExcel);
-router.post('/', validate(saleSchema), addSaleInvoice);
+router.post('/', checkLimit('sales'), validate(saleSchema), addSaleInvoice);
 router.get('/', getSaleInvoices);
 router.put('/:id', validate(updateSaleSchema), updateSaleInvoice);
 router.delete('/:id', deleteSaleInvoice);
