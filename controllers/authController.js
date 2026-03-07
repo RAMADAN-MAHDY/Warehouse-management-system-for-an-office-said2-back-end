@@ -42,14 +42,6 @@ exports.registerUser = async (req, res) => {
 
         const token = generateToken(user._id);
 
-        // ضبط توكن في كوكيز (HttpOnly) للأمان
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: true, // يجب أن يكون true لاستخدام sameSite: 'none'
-            sameSite: 'none',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-        });
-
         return res.status(201).json({
             status: true,
             message: 'User registered successfully',
@@ -78,14 +70,6 @@ exports.loginUser = async (req, res) => {
         }
 
         const token = generateToken(user._id);
-
-        // ضبط توكن في كوكيز (HttpOnly) للأمان
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: true, // يجب أن يكون true لاستخدام sameSite: 'none'
-            sameSite: 'none',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-        });
 
         return res.status(200).json({
             status: true,
@@ -117,10 +101,5 @@ exports.getMe = async (req, res) => {
 };
 
 exports.logoutUser = async (req, res) => {
-    res.clearCookie('token', {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none'
-    });
     res.json({ status: true, message: 'Logged out successfully' });
 };
