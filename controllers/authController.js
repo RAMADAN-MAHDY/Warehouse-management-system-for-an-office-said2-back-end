@@ -56,7 +56,7 @@ exports.registerUser = async (req, res) => {
             data: {
                 user: user.toJSON(),
                 customerId,
-                // لم نعد نرسل التوكن في الجسم لزيادة الأمان
+                token // إعادة التوكن في الجسم لدعم استقرار الـ Session
             }
         });
     } catch (error) {
@@ -93,7 +93,7 @@ exports.loginUser = async (req, res) => {
             data: {
                 user: user.toJSON(),
                 customerId: user.customerId,
-                // لم نعد نرسل التوكن في الجسم لزيادة الأمان
+                token // إعادة التوكن في الجسم لدعم استقرار الـ Session
             }
         });
     } catch (error) {
