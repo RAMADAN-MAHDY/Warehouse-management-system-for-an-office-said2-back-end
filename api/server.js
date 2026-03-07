@@ -98,6 +98,9 @@ const envAllowlist = (CORS_ORIGIN || '')
 
 const STATIC_ALLOWED_ORIGINS = [
   'https://warehouse-management-system-for-an-sooty.vercel.app',
+  'https://warehouse-management-system-for-an.vercel.app',
+  'https://warehouse-management-system-for-an-office-said2-frontend.vercel.app',
+  'https://management-system-said2.vercel.app',
   'http://localhost:3000',
   'http://192.168.1.6:3000'
 ];

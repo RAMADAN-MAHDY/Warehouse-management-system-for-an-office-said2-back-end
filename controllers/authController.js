@@ -45,8 +45,8 @@ exports.registerUser = async (req, res) => {
         // ضبط توكن في كوكيز (HttpOnly) للأمان
         res.cookie('token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true, // يجب أن يكون true لاستخدام sameSite: 'none'
+            sameSite: 'none',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
 
@@ -82,8 +82,8 @@ exports.loginUser = async (req, res) => {
         // ضبط توكن في كوكيز (HttpOnly) للأمان
         res.cookie('token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true, // يجب أن يكون true لاستخدام sameSite: 'none'
+            sameSite: 'none',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
 
@@ -120,7 +120,7 @@ exports.logoutUser = async (req, res) => {
     res.clearCookie('token', {
         httpOnly: true,
         secure: true,
-        sameSite: 'lax'
+        sameSite: 'none'
     });
     res.json({ status: true, message: 'Logged out successfully' });
 };
