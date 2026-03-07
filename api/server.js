@@ -9,7 +9,6 @@ const hpp = require('hpp');
 const mongoose = require('mongoose');
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require('@sentry/profiling-node');
-const cookieParser = require('cookie-parser');
 
 const {
   validateEnv,
