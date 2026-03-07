@@ -5,6 +5,8 @@ const SaleInvoice = require('../models/SaleInvoice');
 const Purchase = require('../models/Purchase');
 const Expense = require('../models/Expense');
 const Plan = require('../models/Plan');
+const User = require('../models/User');
+const { createNotification } = require('./notificationController');
 
 const PLANS = {
     free: {
@@ -106,6 +108,27 @@ exports.submitPayment = async (req, res) => {
             message: 'تم استلام طلب الدفع بنجاح، سيتم تفعيل الاشتراك بعد المراجعة (عادة خلال أقل من ساعة).',
             data: transaction
         });
+
+        // إرسال تنبيه للمستخدم
+        await createNotification(
+            req.customerId,
+            'تم استلام طلب اشتراكك بنجاح وجاري المراجعة الآن.',
+            'subscription_request',
+            { transactionId: transaction._id }
+        );
+
+        // إرسال تنبيه لكل السوبر أدمن
+        const superAdmins = await User.find({ role: 'superadmin' });
+        const user = await User.findOne({ customerId: req.customerId });
+        
+        for (const admin of superAdmins) {
+            await createNotification(
+                admin.customerId,
+                `طلب اشتراك جديد من ${user?.username || 'عميل'} بنوع ${planRequested}`,
+                'subscription_request',
+                { transactionId: transaction._id, customerId: req.customerId }
+            );
+        }
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
     }

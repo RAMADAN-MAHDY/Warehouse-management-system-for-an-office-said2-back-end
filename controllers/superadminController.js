@@ -9,6 +9,7 @@ const Purchase = require('../models/Purchase');
 const Expense = require('../models/Expense');
 
 const exportExcel = require('../utils/exportExcel');
+const { createNotification } = require('./notificationController');
 
 // --- تصدير البيانات ---
 exports.exportUsersExcel = async (req, res) => {
@@ -280,6 +281,14 @@ exports.approveTransaction = async (req, res) => {
         });
 
         res.json({ status: true, message: 'تم قبول الدفعة وتفعيل الاشتراك بنجاح' });
+
+        // إرسال تنبيه للمستخدم بالقبول
+        await createNotification(
+            transaction.customerId,
+            `تهانينا! تم قبول طلب اشتراكك وتفعيل خطة ${transaction.planRequested} بنجاح.`,
+            'subscription_approval',
+            { transactionId: transaction._id, planType: transaction.planRequested }
+        );
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
     }
@@ -310,6 +319,14 @@ exports.rejectTransaction = async (req, res) => {
         });
 
         res.json({ status: true, message: 'تم رفض الدفعة بنجاح' });
+
+        // إرسال تنبيه للمستخدم بالرفض مع السبب
+        await createNotification(
+            transaction.customerId,
+            `نأسف، تم رفض طلب اشتراكك. السبب: ${reason}`,
+            'subscription_rejection',
+            { transactionId: transaction._id, reason }
+        );
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
     }

@@ -178,6 +178,7 @@ app.use('/api/reports', protect, tenantMiddleware, checkSubscription, require('.
 
 app.use('/api/subscription', require('../routes/subscriptionRoutes'));
 app.use('/api/superadmin', require('../routes/superadminRoutes'));
+app.use('/api/notifications', require('../routes/notificationRoutes'));
 
 
 /* ===========================
