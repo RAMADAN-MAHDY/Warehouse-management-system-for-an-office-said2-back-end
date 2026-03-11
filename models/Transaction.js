@@ -25,7 +25,6 @@ const transactionSchema = new mongoose.Schema({
     },
     planRequested: {
         type: String,
-        enum: ['basic', 'professional'],
         required: true
     },
     notes: String,

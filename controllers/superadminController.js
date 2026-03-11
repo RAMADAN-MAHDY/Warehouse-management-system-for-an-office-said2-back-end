@@ -127,8 +127,7 @@ exports.getSystemStats = async (req, res) => {
 const InvoiceFile = require('../models/InvoiceFile');
 const mongoose = require('mongoose');
 
-// --- إحصائيات النظام العامة ---
-// ... (keep existing getSystemStats)
+// --- إدارة المستخدمين ---
 
 // --- إدارة المستخدمين ---
 exports.getAllUsers = async (req, res) => {
@@ -236,8 +235,7 @@ exports.deleteUserPermanently = async (req, res) => {
     }
 };
 
-// --- إدارة خطط الاشتراك ---
-// ... (keep existing createPlan, getPlans, updatePlan, deletePlan)
+// --- إدارة الاشتراكات والمدفوعات ---
 
 // --- إدارة الاشتراكات والمدفوعات ---
 exports.approveTransaction = async (req, res) => {
@@ -353,8 +351,11 @@ exports.getPlans = async (req, res) => {
 
 exports.updatePlan = async (req, res) => {
     try {
-        const plan = await Plan.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        res.json({ status: true, data: plan });
+        const plan = await Plan.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!plan) {
+            return res.status(404).json({ status: false, message: 'الخطة غير موجودة' });
+        }
+        res.json({ status: true, data: plan, message: 'تم تحديث الخطة بنجاح' });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
     }
@@ -362,7 +363,10 @@ exports.updatePlan = async (req, res) => {
 
 exports.deletePlan = async (req, res) => {
     try {
-        await Plan.findByIdAndDelete(req.params.id);
+        const plan = await Plan.findByIdAndDelete(req.params.id);
+        if (!plan) {
+            return res.status(404).json({ status: false, message: 'الخطة غير موجودة' });
+        }
         res.json({ status: true, message: 'تم حذف الخطة بنجاح' });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });

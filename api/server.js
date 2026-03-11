@@ -55,36 +55,6 @@ if (SENTRY_DSN) {
 app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 /* ===========================
-   SECURITY MIDDLEWARES
-=========================== */
-app.use(helmet());
-app.use(hpp());
-app.use(compression());
-
-/* ===========================
-   RATE LIMITING
-=========================== */
-
-// Auth endpoints – حماية أقوى
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// باقي API
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.use('/api/auth', authLimiter);
-app.use('/api', apiLimiter);
-
-/* ===========================
    CORS (Production Ready)
 =========================== */
 
@@ -116,7 +86,7 @@ app.use(
 
       const normalizedOrigin = normalizeOrigin(origin);
 
-      if (allowlist.has(normalizedOrigin)) {
+      if ( allowlist.has(normalizedOrigin)) {
         return callback(null, true);
       }
 
@@ -126,6 +96,37 @@ app.use(
     credentials: false,
   })
 );
+
+/* ===========================
+   SECURITY MIDDLEWARES
+=========================== */
+app.use(helmet());
+app.use(hpp());
+app.use(compression());
+
+/* ===========================
+   RATE LIMITING
+=========================== */
+
+// Auth endpoints – حماية أقوى
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// باقي API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
+
 
 /* ===========================
    BODY PARSING

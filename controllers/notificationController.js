@@ -54,6 +54,22 @@ exports.markAllAsRead = async (req, res) => {
     }
 };
 
+exports.deleteNotification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findOneAndDelete({
+            _id: id,
+            recipientId: req.customerId
+        });
+        if (!notification) {
+            return res.status(404).json({ status: false, message: 'التنبيه غير موجود' });
+        }
+        res.json({ status: true, message: 'تم حذف التنبيه' });
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message });
+    }
+};
+
 // Helper function to create notification (not an exported route)
 exports.createNotification = async (recipientId, message, type, data = {}, senderName = 'النظام') => {
     try {

@@ -7,32 +7,13 @@ const Expense = require('../models/Expense');
 const Plan = require('../models/Plan');
 const User = require('../models/User');
 const { createNotification } = require('./notificationController');
+const { submitPaymentSchema } = require('../validations/subscriptionValidation');
 
-const PLANS = {
-    free: {
-        name: 'تجريبية',
-        price: 0,
-        limits: { maxItems: 200, maxSales: 200, maxExpenses: 200 }
-    },
-    basic: {
-        name: 'أساسية',
-        price: 180,
-        limits: { maxItems: 200, maxSales: 200, maxExpenses: 200 }
-    },
-    professional: {
-        name: 'احترافية',
-        price: 480,
-        limits: { maxItems: 2000, maxSales: 2000, maxExpenses: 2000 }
-    }
-};
+// Removed hardcoded PLANS object to use dynamic Plan model from DB
 
 const getPlanConfig = async (planId) => {
-    // حاول جلب الخطة من قاعدة البيانات أولاً
-    const dbPlan = await Plan.findOne({ id: planId });
-    if (dbPlan) return dbPlan;
-    
-    // العودة للقيم الثابتة كخيار احتياطي
-    return PLANS[planId];
+    // جلب الخطة من قاعدة البيانات
+    return await Plan.findOne({ id: planId });
 };
 
 exports.getSubscriptionStatus = async (req, res) => {
@@ -41,15 +22,17 @@ exports.getSubscriptionStatus = async (req, res) => {
         
         // إذا لم يوجد اشتراك (لمستخدم قديم مثلاً)، قم بإنشاء واحد تجريبي تلقائياً
         if (!subscription) {
+            const freePlan = await getPlanConfig('free');
             const endDate = new Date();
             endDate.setDate(endDate.getDate() + 30);
+            
             subscription = await Subscription.create({
                 customerId: req.customerId,
                 planType: 'free',
                 status: 'active',
                 startDate: new Date(),
                 endDate,
-                limits: PLANS.professional.limits
+                limits: freePlan ? freePlan.limits : { maxItems: 200, maxSales: 200, maxExpenses: 200 }
             });
         }
 
@@ -84,15 +67,31 @@ exports.getSubscriptionStatus = async (req, res) => {
 
 exports.submitPayment = async (req, res) => {
     try {
-        const { amount, referenceNumber, planRequested } = req.body;
-        const planConfig = await getPlanConfig(planRequested);
+        // ===== التحقق من صحة البيانات باستخدام Joi =====
+        const { error, value } = submitPaymentSchema.validate(req.body, { abortEarly: true });
+        if (error) {
+            return res.status(400).json({ status: false, message: error.details[0].message });
+        }
 
+        const { amount, referenceNumber, planRequested } = value;
+
+        // التحقق من الخطة في قاعدة البيانات
+        const planConfig = await getPlanConfig(planRequested);
         if (!planConfig) {
             return res.status(400).json({ status: false, message: 'خطة غير صالحة' });
         }
 
         if (amount < planConfig.price) {
             return res.status(400).json({ status: false, message: 'المبلغ غير كافٍ لهذه الخطة' });
+        }
+
+        // التحقق من عدم وجود طلب معلق مسبقاً لنفس المستخدم
+        const existingPending = await Transaction.findOne({
+            customerId: req.customerId,
+            status: 'pending'
+        });
+        if (existingPending) {
+            return res.status(400).json({ status: false, message: 'لديك طلب اشتراك قيد المراجعة بالفعل، يرجى الانتظار حتى تتم معالجته.' });
         }
 
         const transaction = await Transaction.create({
@@ -129,6 +128,16 @@ exports.submitPayment = async (req, res) => {
                 { transactionId: transaction._id, customerId: req.customerId }
             );
         }
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message });
+    }
+};
+
+// وظيفة للحصول على الخطط العامة المتاحة للاشتراك
+exports.getPublicPlans = async (req, res) => {
+    try {
+        const plans = await Plan.find({ isPublic: true }).sort({ price: 1 });
+        res.json({ status: true, data: plans });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
     }
