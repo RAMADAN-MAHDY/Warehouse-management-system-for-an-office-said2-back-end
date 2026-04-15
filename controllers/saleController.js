@@ -79,7 +79,7 @@ exports.addSaleInvoice = async (req, res) => {
 
 exports.getSaleInvoices = async (req, res) => {
     try {
-        const { day, month, year, from, to } = req.query;
+        const { day, month, year, from, to, page = 1, limit = 10 } = req.query;
         let filter = { customerId: req.customerId };
 
         if (day) {
@@ -103,7 +103,12 @@ exports.getSaleInvoices = async (req, res) => {
             filter.createdAt = { $gte: start, $lt: end };
         }
 
-        const invoices = await SaleInvoice.find(filter).sort({ createdAt: -1 }).limit(100);
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const total = await SaleInvoice.countDocuments(filter);
+        const invoices = await SaleInvoice.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
 
         const sales = invoices.map(invoice => ({
             ...invoice.toObject(),
@@ -113,7 +118,13 @@ exports.getSaleInvoices = async (req, res) => {
         res.status(200).json({
             status: true,
             message: 'فواتير البيع',
-            data: sales
+            data: sales,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / parseInt(limit))
+            }
         });
     } catch (error) {
         res.status(500).json({

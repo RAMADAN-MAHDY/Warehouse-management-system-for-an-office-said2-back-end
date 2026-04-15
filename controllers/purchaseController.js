@@ -6,9 +6,28 @@ const Item = require('../models/Item'); // استيراد نموذج المنت�
 
 exports.list = async (req, res) => {
     try {
-        const purchases = await Purchase.find({ customerId: req.customerId }).populate('itemId').sort({ date: -1 });
+        const { page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const filter = { customerId: req.customerId };
 
-        res.status(200).json({ status: true, message: 'Purchases', data: purchases });
+        const total = await Purchase.countDocuments(filter);
+        const purchases = await Purchase.find(filter)
+            .populate('itemId')
+            .sort({ date: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        res.status(200).json({
+            status: true,
+            message: 'Purchases',
+            data: purchases,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
     }
