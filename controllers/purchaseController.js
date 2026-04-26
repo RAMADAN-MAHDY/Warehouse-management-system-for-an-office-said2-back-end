@@ -15,7 +15,8 @@ exports.list = async (req, res) => {
             .populate('itemId')
             .sort({ date: -1 })
             .skip(skip)
-            .limit(parseInt(limit));
+            .limit(parseInt(limit))
+            .lean();
 
         res.status(200).json({
             status: true,
@@ -88,7 +89,7 @@ exports.update = async (req, res) => {
         const { id } = req.params;
         const { modelNumber, name, quantity, price, supplier, date } = req.body;
         const amount = Number(price) * Number(quantity);
-        const before = await Purchase.findOne({ _id: id, customerId: req.customerId });
+        const before = await Purchase.findOne({ _id: id, customerId: req.customerId }).lean();
         if (!before) return res.status(404).json({ status: false, message: 'Purchase not found', data: null });
         const doc = await Purchase.findByIdAndUpdate(
             id,
@@ -106,7 +107,7 @@ exports.update = async (req, res) => {
                 supplier
             },
             { new: true }
-        );
+        ).lean();
         await AuditLog.create({
             customerId: req.customerId,
             userId: req.user?._id,
@@ -142,9 +143,9 @@ exports.remove = async (req, res) => {
     try {
         const { id } = req.params;
         if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ status: false, message: 'Invalid id', data: null });
-        const doc = await Purchase.findOne({ _id: id, customerId: req.customerId });
+        const doc = await Purchase.findOne({ _id: id, customerId: req.customerId }).lean();
         if (!doc) return res.status(404).json({ status: false, message: 'Purchase not found', data: null });
-        await PurchaseBackup.create({ ...doc.toObject(), originalId: doc._id });
+        await PurchaseBackup.create({ ...doc, originalId: doc._id });
         await Purchase.findByIdAndDelete(id);
         await AuditLog.create({
             customerId: req.customerId,

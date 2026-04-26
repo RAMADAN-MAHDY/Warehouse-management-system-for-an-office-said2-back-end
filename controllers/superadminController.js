@@ -14,9 +14,9 @@ const { createNotification } = require('./notificationController');
 // --- تصدير البيانات ---
 exports.exportUsersExcel = async (req, res) => {
     try {
-        const users = await User.find({ role: { $ne: 'superadmin' } }).sort({ createdAt: -1 });
+        const users = await User.find({ role: { $ne: 'superadmin' } }).sort({ createdAt: -1 }).lean();
         const usersWithSubscriptions = await Promise.all(users.map(async (user) => {
-            const sub = await Subscription.findOne({ customerId: user.customerId });
+            const sub = await Subscription.findOne({ customerId: user.customerId }).lean();
             return {
                 'كود العميل': user.customerId,
                 'اسم المستخدم': user.username,
@@ -41,7 +41,7 @@ exports.exportUsersExcel = async (req, res) => {
 
 exports.exportTransactionsExcel = async (req, res) => {
     try {
-        const transactions = await Transaction.find().sort({ createdAt: -1 });
+        const transactions = await Transaction.find().sort({ createdAt: -1 }).lean();
         const data = transactions.map(t => ({
             'كود العميل': t.customerId,
             'المبلغ': t.amount,
@@ -132,13 +132,13 @@ const mongoose = require('mongoose');
 // --- إدارة المستخدمين ---
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.find({ role: { $ne: 'superadmin' } }).sort({ createdAt: -1 });
+        const users = await User.find({ role: { $ne: 'superadmin' } }).sort({ createdAt: -1 }).lean();
         
         // جلب تفاصيل الاشتراك لكل مستخدم
         const usersWithSubscriptions = await Promise.all(users.map(async (user) => {
-            const subscription = await Subscription.findOne({ customerId: user.customerId });
+            const subscription = await Subscription.findOne({ customerId: user.customerId }).lean();
             return {
-                ...user.toObject(),
+                ...user,
                 subscription: subscription || null
             };
         }));
@@ -195,8 +195,7 @@ exports.deleteUserPermanently = async (req, res) => {
         if (!reason) {
             return res.status(400).json({ status: false, message: 'يجب ذكر سبب الحذف النهائي' });
         }
-
-        const user = await User.findById(userId);
+        const user = await User.findById(userId).lean();
         if (!user) return res.status(404).json({ status: false, message: 'المستخدم غير موجود' });
         if (user.role === 'superadmin') return res.status(403).json({ status: false, message: 'لا يمكن حذف حساب سوبر أدمن' });
 
@@ -249,7 +248,7 @@ exports.approveTransaction = async (req, res) => {
 
         // تفعيل الاشتراك (مناداة الوظيفة الموجودة أو إعادة كتابتها هنا لضمان التدقيق)
         const Plan = require('../models/Plan');
-        const dbPlan = await Plan.findOne({ id: transaction.planRequested });
+        const dbPlan = await Plan.findOne({ id: transaction.planRequested }).lean();
         
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + 30);
@@ -342,7 +341,7 @@ exports.createPlan = async (req, res) => {
 
 exports.getPlans = async (req, res) => {
     try {
-        const plans = await Plan.find().sort({ price: 1 });
+        const plans = await Plan.find().sort({ price: 1 }).lean();
         res.json({ status: true, data: plans });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
@@ -430,7 +429,7 @@ exports.updateUserSubscription = async (req, res) => {
 
         let plan = null;
         if (planType) {
-            plan = await Plan.findOne({ id: planType });
+            plan = await Plan.findOne({ id: planType }).lean();
             if (!plan) return res.status(400).json({ status: false, message: `نوع الخطة غير صالح: ${planType} غير موجود` });
         }
 
@@ -473,7 +472,7 @@ exports.updateUserSubscription = async (req, res) => {
 
 exports.getAuditLogs = async (req, res) => {
     try {
-        const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(100);
+        const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(100).lean();
         res.json({ status: true, data: logs });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });

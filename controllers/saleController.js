@@ -15,7 +15,7 @@ exports.exportSalesToExcel = async (req, res) => {
             filter.createdAt = { $gte: start, $lte: end };
         }
 
-        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 });
+        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 }).lean();
 
         const data = sales.map(sale => ({
             'رقم الفاتورة': sale._id.toString(),
@@ -108,10 +108,11 @@ exports.getSaleInvoices = async (req, res) => {
         const invoices = await SaleInvoice.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(parseInt(limit));
+            .limit(parseInt(limit))
+            .lean();
 
         const sales = invoices.map(invoice => ({
-            ...invoice.toObject(),
+            ...invoice,
             customer: invoice.sellerName || 'N/A'
         }));
 

@@ -28,9 +28,9 @@ exports.getSummary = async (req, res) => {
                 { $match: { customerId: cid } },
                 { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } }
             ]),
-            Expense.find({ customerId: cid }),
-            SaleInvoice.find({ customerId: cid }).sort({ createdAt: -1 }).limit(5),
-            Item.find({ customerId: cid, quantity: { $lt: 5 } }).limit(10)
+            Expense.find({ customerId: cid }).lean(),
+            SaleInvoice.find({ customerId: cid }).sort({ createdAt: -1 }).limit(5).lean(),
+            Item.find({ customerId: cid, quantity: { $lt: 5 } }).limit(10).lean()
         ]);
 
         const totalExpenses = expensesList.reduce((sum, e) => sum + e.amount, 0);
@@ -67,7 +67,7 @@ exports.getSummary = async (req, res) => {
 exports.getProfitSummaryJson = async (req, res) => {
     try {
         const cid = req.customerId;
-        const purchases = await Purchase.find({ customerId: cid }).sort({ date: -1 }).limit(100);
+        const purchases = await Purchase.find({ customerId: cid }).sort({ date: -1 }).limit(100).lean();
         const totalPurchasesAgg = await Purchase.aggregate([
             { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: "$amount" } } }
@@ -82,7 +82,7 @@ exports.getProfitSummaryJson = async (req, res) => {
             { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
         ]);
 
-        const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 });
+        const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 }).lean();
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
         const netProfit = (totalSales[0]?.total || 0) - (totalCOGS[0]?.total || 0) - totalExpenses;
@@ -131,7 +131,8 @@ exports.getSalesReport = async (req, res) => {
             SaleInvoice.find(filter)
                 .sort({ createdAt: -1 })
                 .skip((pageNum - 1) * limitNum)
-                .limit(limitNum),
+                .limit(limitNum)
+                .lean(),
             SaleInvoice.countDocuments(filter),
             SaleInvoice.aggregate([
                 { $match: filter },
@@ -178,7 +179,7 @@ exports.getInventoryReport = async (req, res) => {
         }
 
         const [items, aggregate] = await Promise.all([
-            Item.find(filter).sort({ quantity: 1 }),
+            Item.find(filter).sort({ quantity: 1 }).lean(),
             Item.aggregate([
                 { $match: { customerId: cid } },
                 {

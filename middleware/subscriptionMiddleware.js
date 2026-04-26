@@ -1,4 +1,8 @@
 const Subscription = require('../models/Subscription');
+const Item = require('../models/Item');
+const SaleInvoice = require('../models/SaleInvoice');
+const Purchase = require('../models/Purchase');
+const Expense = require('../models/Expense');
 
 /**
  * Middleware للتحقق من حالة الاشتراك قبل تنفيذ العمليات الحساسة
@@ -77,23 +81,37 @@ const checkLimit = (resource) => {
                 });
             }
 
-            // خريطة الموارد للحدود والاستهلاك
+            // خريطة الموارد للحدود
             const limitsMap = {
-                items: { limit: 'maxItems', usage: 'items' },
-                sales: { limit: 'maxSales', usage: 'sales' },
-                expenses: { limit: 'maxExpenses', usage: 'expenses' }
+                items: { limit: 'maxItems' },
+                sales: { limit: 'maxSales' },
+                expenses: { limit: 'maxExpenses' }
             };
 
             const config = limitsMap[resource];
             if (!config) return next();
 
             const limit = subscription.limits?.[config.limit] || 0;
-            const currentUsage = subscription.usage?.[config.usage] || 0;
+            
+            // حساب الاستهلاك الفعلي حالياً لضمان الدقة
+            let currentUsage = 0;
+            const cid = req.customerId;
+            
+            if (resource === 'items') {
+                currentUsage = await Item.countDocuments({ customerId: cid });
+            } else if (resource === 'sales') {
+                const salesCount = await SaleInvoice.countDocuments({ customerId: cid });
+                const purchasesCount = await Purchase.countDocuments({ customerId: cid });
+                currentUsage = salesCount + purchasesCount;
+            } else if (resource === 'expenses') {
+                currentUsage = await Expense.countDocuments({ customerId: cid });
+            }
 
             if (currentUsage >= limit) {
+                const resourceNameAr = resource === 'items' ? 'منتج' : resource === 'sales' ? 'عملية (بيع/شراء)' : 'مصروف';
                 return res.status(400).json({
                     status: false,
-                    message: `لقد وصلت للحد الأقصى المسموح به في خطتك (${limit} ${resource}). يرجى ترقية الاشتراك.`,
+                    message: `لقد وصلت للحد الأقصى المسموح به في خطتك (${limit} ${resourceNameAr}). يرجى ترقية الاشتراك للمتابعة.`,
                     type: 'LIMIT_REACHED'
                 });
             }

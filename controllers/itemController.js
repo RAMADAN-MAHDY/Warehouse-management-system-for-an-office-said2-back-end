@@ -59,7 +59,7 @@ exports.searchItems = async (req, res) => {
                 { name: { $regex: q, $options: 'i' } },
                 { customer: { $regex: q, $options: 'i' } },
             ],
-        });
+        }).lean();
         res.status(200).json({ status: true, message: 'Search results', data: items });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
@@ -71,7 +71,7 @@ exports.addItem = async (req, res) => {
         const { modelNumber, name, quantity, price, customer } = req.body;
         // إضافة customerId تلقائياً من بيانات المستخدم المسجّل
         const item = await Item.create({ modelNumber, name, quantity, price, costPrice: price, customer, customerId: req.customerId });
-        const fullItem = await Item.findById(item._id);
+        const fullItem = await Item.findById(item._id).lean();
         try {
             await Purchase.create({
                 customerId: req.customerId,
@@ -126,7 +126,7 @@ exports.updateItem = async (req, res) => {
 
 exports.exportToExcel = async (req, res) => {
     try {
-        const items = await Item.find({ customerId: req.customerId });
+        const items = await Item.find({ customerId: req.customerId }).lean();
         
         if (!items || items.length === 0) {
             return res.status(404).json({ status: false, message: 'لا توجد بيانات لتصديرها' });
@@ -169,7 +169,7 @@ exports.exportToExcel = async (req, res) => {
 exports.downloadExcel = async (req, res) => {
     try {
         const InvoiceFile = require('../models/InvoiceFile');
-        const file = await InvoiceFile.findOne({ _id: req.params.id, customerId: req.customerId });
+        const file = await InvoiceFile.findOne({ _id: req.params.id, customerId: req.customerId }).lean();
         if (!file) return res.status(404).json({ status: false, message: 'File not found or unauthorized', data: null });
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

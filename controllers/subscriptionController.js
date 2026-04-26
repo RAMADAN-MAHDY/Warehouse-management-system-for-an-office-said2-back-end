@@ -13,12 +13,12 @@ const { submitPaymentSchema } = require('../validations/subscriptionValidation')
 
 const getPlanConfig = async (planId) => {
     // جلب الخطة من قاعدة البيانات
-    return await Plan.findOne({ id: planId });
+    return await Plan.findOne({ id: planId }).lean();
 };
 
 exports.getSubscriptionStatus = async (req, res) => {
     try {
-        let subscription = await Subscription.findOne({ customerId: req.customerId });
+        let subscription = await Subscription.findOne({ customerId: req.customerId }).lean();
         
         // إذا لم يوجد اشتراك (لمستخدم قديم مثلاً)، قم بإنشاء واحد تجريبي تلقائياً
         if (!subscription) {
@@ -89,7 +89,7 @@ exports.submitPayment = async (req, res) => {
         const existingPending = await Transaction.findOne({
             customerId: req.customerId,
             status: 'pending'
-        });
+        }).lean();
         if (existingPending) {
             return res.status(400).json({ status: false, message: 'لديك طلب اشتراك قيد المراجعة بالفعل، يرجى الانتظار حتى تتم معالجته.' });
         }
@@ -117,8 +117,8 @@ exports.submitPayment = async (req, res) => {
         );
 
         // إرسال تنبيه لكل السوبر أدمن
-        const superAdmins = await User.find({ role: 'superadmin' });
-        const user = await User.findOne({ customerId: req.customerId });
+        const superAdmins = await User.find({ role: 'superadmin' }).lean();
+        const user = await User.findOne({ customerId: req.customerId }).lean();
         
         for (const admin of superAdmins) {
             await createNotification(
@@ -136,7 +136,7 @@ exports.submitPayment = async (req, res) => {
 // وظيفة للحصول على الخطط العامة المتاحة للاشتراك
 exports.getPublicPlans = async (req, res) => {
     try {
-        const plans = await Plan.find({ isPublic: true }).sort({ price: 1 });
+        const plans = await Plan.find({ isPublic: true }).sort({ price: 1 }).lean();
         res.json({ status: true, data: plans });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });

@@ -13,8 +13,28 @@ router.use(checkSubscription);
 // Get all expenses for current user (JSON API)
 router.get('/', async (req, res) => {
     try {
-        const expenses = await Expense.find({ customerId: req.customerId }).sort({ date: -1 });
-        res.status(200).json({ status: true, message: 'Expenses fetched', data: expenses });
+        const { page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const filter = { customerId: req.customerId };
+
+        const total = await Expense.countDocuments(filter);
+        const expenses = await Expense.find(filter)
+            .sort({ date: -1 })
+            .skip(skip)
+            .limit(parseInt(limit))
+            .lean();
+
+        res.status(200).json({
+            status: true,
+            message: 'Expenses fetched',
+            data: expenses,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
     }

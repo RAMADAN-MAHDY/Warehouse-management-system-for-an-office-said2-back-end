@@ -4,7 +4,8 @@ exports.getNotifications = async (req, res) => {
     try {
         const notifications = await Notification.find({ recipientId: req.customerId })
             .sort({ createdAt: -1 })
-            .limit(50);
+            .limit(50)
+            .lean();
         
         const unreadCount = await Notification.countDocuments({ 
             recipientId: req.customerId, 
@@ -30,7 +31,7 @@ exports.markAsRead = async (req, res) => {
             { _id: id, recipientId: req.customerId },
             { isRead: true },
             { new: true }
-        );
+        ).lean();
 
         if (!notification) {
             return res.status(404).json({ status: false, message: 'التنبيه غير موجود' });
