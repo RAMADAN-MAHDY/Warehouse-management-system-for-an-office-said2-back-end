@@ -105,6 +105,12 @@ exports.getSaleInvoices = async (req, res) => {
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const total = await SaleInvoice.countDocuments(filter);
+        const stats = await SaleInvoice.aggregate([
+            { $match: filter },
+            { $group: { _id: null, totalValue: { $sum: "$total" } } }
+        ]);
+        const totalSalesValue = stats[0]?.totalValue || 0;
+
         const invoices = await SaleInvoice.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -120,6 +126,7 @@ exports.getSaleInvoices = async (req, res) => {
             status: true,
             message: 'فواتير البيع',
             data: sales,
+            totalSalesValue,
             pagination: {
                 total,
                 page: parseInt(page),

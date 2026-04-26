@@ -18,6 +18,12 @@ router.get('/', async (req, res) => {
         const filter = { customerId: req.customerId };
 
         const total = await Expense.countDocuments(filter);
+        const stats = await Expense.aggregate([
+            { $match: filter },
+            { $group: { _id: null, totalValue: { $sum: "$amount" } } }
+        ]);
+        const totalExpensesValue = stats[0]?.totalValue || 0;
+
         const expenses = await Expense.find(filter)
             .sort({ date: -1 })
             .skip(skip)
@@ -28,6 +34,7 @@ router.get('/', async (req, res) => {
             status: true,
             message: 'Expenses fetched',
             data: expenses,
+            totalExpensesValue,
             pagination: {
                 total,
                 page: parseInt(page),

@@ -11,6 +11,12 @@ exports.list = async (req, res) => {
         const filter = { customerId: req.customerId };
 
         const total = await Purchase.countDocuments(filter);
+        const stats = await Purchase.aggregate([
+            { $match: filter },
+            { $group: { _id: null, totalValue: { $sum: "$amount" } } }
+        ]);
+        const totalPurchasesValue = stats[0]?.totalValue || 0;
+
         const purchases = await Purchase.find(filter)
             .populate('itemId')
             .sort({ date: -1 })
@@ -22,6 +28,7 @@ exports.list = async (req, res) => {
             status: true,
             message: 'Purchases',
             data: purchases,
+            totalPurchasesValue,
             pagination: {
                 total,
                 page: parseInt(page),
