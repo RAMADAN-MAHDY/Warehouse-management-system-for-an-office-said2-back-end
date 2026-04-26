@@ -22,9 +22,13 @@ exports.deleteItem = async (req, res) => {
 
 exports.getAllItems = async (req, res) => {
     try {
-        const { page = 1, limit = 10 } = req.query;
+        const { page = 1, limit = 10, lowStock } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const filter = { customerId: req.customerId };
+
+        if (lowStock === 'true') {
+            filter.quantity = { $lt: 5 };
+        }
 
         const total = await Item.countDocuments(filter);
         const stats = await Item.aggregate([
