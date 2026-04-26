@@ -22,8 +22,28 @@ exports.deleteItem = async (req, res) => {
 
 exports.getAllItems = async (req, res) => {
     try {
-        const items = await Item.find({ customerId: req.customerId });
-        res.status(200).json({ status: true, message: 'Items fetched', data: items });
+        const { page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const filter = { customerId: req.customerId };
+
+        const total = await Item.countDocuments(filter);
+        const items = await Item.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit))
+            .lean();
+
+        res.status(200).json({
+            status: true,
+            message: 'Items fetched',
+            data: items,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
     }
