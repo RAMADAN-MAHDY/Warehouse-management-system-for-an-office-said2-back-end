@@ -27,6 +27,12 @@ exports.getAllItems = async (req, res) => {
         const filter = { customerId: req.customerId };
 
         const total = await Item.countDocuments(filter);
+        const stats = await Item.aggregate([
+            { $match: filter },
+            { $group: { _id: null, totalValue: { $sum: { $multiply: ["$price", "$quantity"] } } } }
+        ]);
+        const totalInventoryValue = stats[0]?.totalValue || 0;
+
         const items = await Item.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -37,6 +43,7 @@ exports.getAllItems = async (req, res) => {
             status: true,
             message: 'Items fetched',
             data: items,
+            totalInventoryValue,
             pagination: {
                 total,
                 page: parseInt(page),
