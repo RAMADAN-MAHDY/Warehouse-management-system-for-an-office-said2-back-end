@@ -23,9 +23,10 @@
 - [13) Excel Files (ملفات Excel المحفوظة)](#13-excel-files-ملفات-excel-المحفوظة)
 - [14) Reports (التقارير)](#14-reports-التقارير)
 - [15) Profit Summary (ملخص الربح السريع)](#15-profit-summary-ملخص-الربح-السريع)
-- [16) Subscription (الاشتراكات)](#16-subscription-الاشتراكات)
-- [17) Superadmin (لوحة السوبر أدمن)](#17-superadmin-لوحة-السوبر-أدمن)
-- [18) Notifications (التنبيهات)](#18-notifications-التنبيهات)
+- [16) Returns (المرتجعات)](#16-returns-المرتجعات)
+- [17) Subscription (الاشتراكات)](#17-subscription-الاشتراكات)
+- [18) Superadmin (لوحة السوبر أدمن)](#18-superadmin-لوحة-السوبر-أدمن)
+- [19) Notifications (التنبيهات)](#19-notifications-التنبيهات)
 
 ---
 
