@@ -8,6 +8,9 @@ module.exports.connect = async () => {
     if (mongoose.connection.readyState !== 0) {
         await mongoose.disconnect();
     }
+    if (!process.env.MONGOMS_START_TIMEOUT) {
+        process.env.MONGOMS_START_TIMEOUT = '60000';
+    }
     mongod = await MongoMemoryServer.create();
     const uri = mongod.getUri();
     await mongoose.connect(uri);

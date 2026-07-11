@@ -3,6 +3,7 @@ const Item = require('../models/Item');
 const exportExcel = require('../utils/exportExcel');
 const InvoiceFile = require('../models/InvoiceFile');
 const StockMovement = require('../models/StockMovement');
+const Representative = require('../models/Representative');
 const mongoose = require('mongoose');
 
 exports.exportSalesToExcel = async (req, res) => {
@@ -51,7 +52,23 @@ exports.addSaleInvoice = async (req, res) => {
     const session = await mongoose.startSession();
     const runWithTransaction = async () => {
         session.startTransaction();
-        const { modelNumber, name, quantity, price, sellerName, total: frontTotal } = req.body;
+        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal } = req.body;
+
+        let repIdToSave;
+        let resolvedSellerName = sellerName;
+        if (representativeId) {
+            if (!mongoose.Types.ObjectId.isValid(representativeId)) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'Invalid representativeId', data: null });
+            }
+            const rep = await Representative.findOne({ _id: representativeId, customerId: req.customerId, isActive: true }).session(session);
+            if (!rep) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'المندوب غير موجود أو غير نشط', data: null });
+            }
+            repIdToSave = rep._id;
+            resolvedSellerName = rep.name;
+        }
 
         const item = await Item.findOne({ modelNumber, customerId: req.customerId }).session(session);
         if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود', data: null });
@@ -76,7 +93,8 @@ exports.addSaleInvoice = async (req, res) => {
                     quantity,
                     price,
                     total,
-                    sellerName,
+                    sellerName: resolvedSellerName,
+                    representativeId: repIdToSave,
                     costPrice: unitCost
                 }
             ],
@@ -129,7 +147,21 @@ exports.addSaleInvoice = async (req, res) => {
 
 exports.addSaleInvoiceNoTx = async (req, res) => {
     try {
-        const { modelNumber, name, quantity, price, sellerName, total: frontTotal } = req.body;
+        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal } = req.body;
+
+        let repIdToSave;
+        let resolvedSellerName = sellerName;
+        if (representativeId) {
+            if (!mongoose.Types.ObjectId.isValid(representativeId)) {
+                return res.status(400).json({ status: false, message: 'Invalid representativeId', data: null });
+            }
+            const rep = await Representative.findOne({ _id: representativeId, customerId: req.customerId, isActive: true });
+            if (!rep) {
+                return res.status(400).json({ status: false, message: 'المندوب غير موجود أو غير نشط', data: null });
+            }
+            repIdToSave = rep._id;
+            resolvedSellerName = rep.name;
+        }
 
         const item = await Item.findOne({ modelNumber, customerId: req.customerId });
         if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود', data: null });
@@ -148,7 +180,8 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             quantity,
             price,
             total,
-            sellerName,
+            sellerName: resolvedSellerName,
+            representativeId: repIdToSave,
             costPrice: unitCost
         });
 
@@ -241,10 +274,33 @@ exports.updateSaleInvoice = async (req, res) => {
     const runWithTransaction = async () => {
         session.startTransaction();
         const { id } = req.params;
-        const { quantity, price } = req.body;
+        const { quantity, price, sellerName, representativeId } = req.body;
 
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId }).session(session);
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
+
+        let repIdToSave = sale.representativeId;
+        let resolvedSellerName = sale.sellerName;
+        if (representativeId !== undefined) {
+            if (representativeId) {
+                if (!mongoose.Types.ObjectId.isValid(representativeId)) {
+                    await session.abortTransaction();
+                    return res.status(400).json({ status: false, message: 'Invalid representativeId' });
+                }
+                const rep = await Representative.findOne({ _id: representativeId, customerId: req.customerId, isActive: true }).session(session);
+                if (!rep) {
+                    await session.abortTransaction();
+                    return res.status(400).json({ status: false, message: 'المندوب غير موجود أو غير نشط' });
+                }
+                repIdToSave = rep._id;
+                resolvedSellerName = rep.name;
+            } else {
+                repIdToSave = undefined;
+                resolvedSellerName = sellerName !== undefined ? sellerName : '';
+            }
+        } else if (!sale.representativeId && sellerName !== undefined) {
+            resolvedSellerName = sellerName;
+        }
 
         const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId }).session(session);
         if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود' });
@@ -264,6 +320,8 @@ exports.updateSaleInvoice = async (req, res) => {
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = newQty * Number(price);
+        sale.sellerName = resolvedSellerName;
+        sale.representativeId = repIdToSave;
         await sale.save({ session });
 
         if (delta !== 0) {
@@ -313,10 +371,31 @@ exports.updateSaleInvoice = async (req, res) => {
 exports.updateSaleInvoiceNoTx = async (req, res) => {
     try {
         const { id } = req.params;
-        const { quantity, price } = req.body;
+        const { quantity, price, sellerName, representativeId } = req.body;
 
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId });
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
+
+        let repIdToSave = sale.representativeId;
+        let resolvedSellerName = sale.sellerName;
+        if (representativeId !== undefined) {
+            if (representativeId) {
+                if (!mongoose.Types.ObjectId.isValid(representativeId)) {
+                    return res.status(400).json({ status: false, message: 'Invalid representativeId' });
+                }
+                const rep = await Representative.findOne({ _id: representativeId, customerId: req.customerId, isActive: true });
+                if (!rep) {
+                    return res.status(400).json({ status: false, message: 'المندوب غير موجود أو غير نشط' });
+                }
+                repIdToSave = rep._id;
+                resolvedSellerName = rep.name;
+            } else {
+                repIdToSave = undefined;
+                resolvedSellerName = sellerName !== undefined ? sellerName : '';
+            }
+        } else if (!sale.representativeId && sellerName !== undefined) {
+            resolvedSellerName = sellerName;
+        }
 
         const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId });
         if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود' });
@@ -335,6 +414,8 @@ exports.updateSaleInvoiceNoTx = async (req, res) => {
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = newQty * Number(price);
+        sale.sellerName = resolvedSellerName;
+        sale.representativeId = repIdToSave;
         await sale.save();
 
         if (delta !== 0) {

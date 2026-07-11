@@ -180,6 +180,7 @@ app.use('/api/expenses', protect, tenantMiddleware, checkSubscription, require('
 app.use('/api/excel-files', protect, tenantMiddleware, checkSubscription, require('../routes/excelRoutes'));
 app.use('/api/reports', protect, tenantMiddleware, checkSubscription, require('../routes/reportRoutes'));
 app.use('/api/returns', protect, tenantMiddleware, checkSubscription, require('../routes/returnRoutes'));
+app.use('/api/representatives', protect, tenantMiddleware, checkSubscription, require('../routes/representativeRoutes'));
 
 
 app.use('/api/subscription', require('../routes/subscriptionRoutes'));

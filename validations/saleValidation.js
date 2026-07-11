@@ -20,6 +20,7 @@ const saleSchema = Joi.object({
         'number.max': 'Price cannot exceed 10,000,000'
     }),
     sellerName: Joi.string().trim().max(50).allow('').optional(),
+    representativeId: Joi.string().trim().allow('', null).optional(),
     total: Joi.number().min(0).max(100000000).optional()
 });
 
@@ -39,7 +40,10 @@ const updateSaleSchema = Joi.object({
         'number.base': 'Price must be a number',
         'number.min': 'Price cannot be negative',
         'number.max': 'Price cannot exceed 10,000,000'
-    })
+    }),
+    sellerName: Joi.string().trim().max(50).allow('').optional(),
+    representativeId: Joi.string().trim().allow('', null).optional(),
+    total: Joi.number().min(0).max(100000000).optional()
 });
 
 module.exports = {
