@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Item = require('../models/Item');
 const SaleInvoice = require('../models/SaleInvoice');
+const Return = require('../models/Return');
 const Expense = require('../models/Expense');
 const StockMovement = require('../models/StockMovement');
 
@@ -19,6 +20,8 @@ exports.getSummary = async (req, res) => {
             totalPurchaseInvoicesAgg,
             totalSalesAgg,
             totalCOGSAgg,
+            totalReturnsAgg,
+            totalReturnsCOGSAgg,
             expensesList,
             recentSales,
             lowStockItems
@@ -36,14 +39,26 @@ exports.getSummary = async (req, res) => {
                 { $match: { customerId: cid } },
                 { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
             ]),
+            Return.aggregate([
+                { $match: { customerId: cid } },
+                { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } }
+            ]),
+            Return.aggregate([
+                { $match: { customerId: cid } },
+                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+            ]),
             Expense.find({ customerId: cid }).lean(),
             SaleInvoice.find({ customerId: cid }).sort({ createdAt: -1 }).limit(5).lean(),
             Item.find({ customerId: cid, quantity: { $lt: 5 } }).limit(10).lean()
         ]);
 
         const totalExpenses = expensesList.reduce((sum, e) => sum + e.amount, 0);
-        const totalSales = totalSalesAgg[0]?.total || 0;
-        const totalCOGS = totalCOGSAgg[0]?.total || 0;
+        const grossSales = totalSalesAgg[0]?.total || 0;
+        const grossCOGS = totalCOGSAgg[0]?.total || 0;
+        const totalReturns = totalReturnsAgg[0]?.total || 0;
+        const returnsCOGS = totalReturnsCOGSAgg[0]?.total || 0;
+        const totalSales = grossSales - totalReturns;
+        const totalCOGS = grossCOGS - returnsCOGS;
         const totalPurchaseInvoices = totalPurchaseInvoicesAgg[0]?.total || 0;
         const netProfit = totalSales - totalCOGS - totalExpenses;
 
@@ -58,8 +73,12 @@ exports.getSummary = async (req, res) => {
                 },
                 financials: {
                     totalSales,
+                    grossSales,
+                    totalReturns,
                     salesCount: totalSalesAgg[0]?.count || 0,
                     totalCOGS,
+                    grossCOGS,
+                    returnsCOGS,
                     totalPurchases: totalPurchaseInvoices,
                     purchasesCount: totalPurchaseInvoicesAgg[0]?.count || 0,
                     totalExpenses,
@@ -138,12 +157,22 @@ exports.getProfitSummaryJson = async (req, res) => {
             { $match: { customerId: cid, status: 'posted' } },
             { $group: { _id: null, total: { $sum: "$grandTotal" } } }
         ]);
-        const totalSales = await SaleInvoice.aggregate([
+        const salesAgg = await SaleInvoice.aggregate([
             { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: "$total" } } }
         ]);
 
-        const totalCOGS = await SaleInvoice.aggregate([
+        const cogsAgg = await SaleInvoice.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+        ]);
+
+        const returnsAgg = await Return.aggregate([
+            { $match: { customerId: cid } },
+            { $group: { _id: null, total: { $sum: "$total" } } }
+        ]);
+
+        const returnsCOGSAgg = await Return.aggregate([
             { $match: { customerId: cid } },
             { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
         ]);
@@ -151,14 +180,24 @@ exports.getProfitSummaryJson = async (req, res) => {
         const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 }).lean();
         const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
-        const netProfit = (totalSales[0]?.total || 0) - (totalCOGS[0]?.total || 0) - totalExpenses;
+        const grossSales = salesAgg[0]?.total || 0;
+        const grossCOGS = cogsAgg[0]?.total || 0;
+        const totalReturns = returnsAgg[0]?.total || 0;
+        const returnsCOGS = returnsCOGSAgg[0]?.total || 0;
+        const totalSales = grossSales - totalReturns;
+        const totalCOGS = grossCOGS - returnsCOGS;
+        const netProfit = totalSales - totalCOGS - totalExpenses;
 
         res.json({
             status: true,
             data: {
                 totalPurchases: totalPurchaseInvoicesAgg[0]?.total || 0,
-                totalSales: totalSales[0]?.total || 0,
-                totalCOGS: totalCOGS[0]?.total || 0,
+                totalSales,
+                grossSales,
+                totalReturns,
+                totalCOGS,
+                grossCOGS,
+                returnsCOGS,
                 netProfit,
                 totalExpenses,
                 // purchases,
@@ -193,7 +232,18 @@ exports.getSalesReport = async (req, res) => {
             }
         }
 
-        const [invoices, total, aggregate] = await Promise.all([
+        const returnFilter = { customerId: cid };
+        if (from || to) {
+            returnFilter.date = {};
+            if (from) returnFilter.date.$gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                toDate.setDate(toDate.getDate() + 1);
+                returnFilter.date.$lt = toDate;
+            }
+        }
+
+        const [invoices, total, salesAgg, returnsAgg] = await Promise.all([
             SaleInvoice.find(filter)
                 .sort({ createdAt: -1 })
                 .skip((pageNum - 1) * limitNum)
@@ -203,8 +253,19 @@ exports.getSalesReport = async (req, res) => {
             SaleInvoice.aggregate([
                 { $match: filter },
                 { $group: { _id: null, totalRevenue: { $sum: "$total" }, totalQty: { $sum: "$quantity" }, avgPrice: { $avg: "$price" } } }
+            ]),
+            Return.aggregate([
+                { $match: returnFilter },
+                { $group: { _id: null, totalReturns: { $sum: "$total" }, totalReturnedQty: { $sum: "$quantity" } } }
             ])
         ]);
+
+        const grossRevenue = salesAgg[0]?.totalRevenue || 0;
+        const grossQuantitySold = salesAgg[0]?.totalQty || 0;
+        const totalReturns = returnsAgg[0]?.totalReturns || 0;
+        const totalReturnedQuantity = returnsAgg[0]?.totalReturnedQty || 0;
+        const netRevenue = grossRevenue - totalReturns;
+        const netQuantitySold = grossQuantitySold - totalReturnedQuantity;
 
         res.json({
             status: true,
@@ -212,9 +273,13 @@ exports.getSalesReport = async (req, res) => {
                 customerId: cid,
                 pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
                 summary: {
-                    totalRevenue: aggregate[0]?.totalRevenue || 0,
-                    totalQuantitySold: aggregate[0]?.totalQty || 0,
-                    averagePrice: aggregate[0]?.avgPrice || 0
+                    totalRevenue: netRevenue,
+                    grossRevenue,
+                    totalReturns,
+                    totalQuantitySold: netQuantitySold,
+                    grossQuantitySold,
+                    totalReturnedQuantity,
+                    averagePrice: salesAgg[0]?.avgPrice || 0
                 },
                 invoices
             }
@@ -294,6 +359,17 @@ exports.getProfitReport = async (req, res) => {
             }
         }
 
+        const returnFilter = { customerId: cid };
+        if (from || to) {
+            returnFilter.date = {};
+            if (from) returnFilter.date.$gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                toDate.setDate(toDate.getDate() + 1);
+                returnFilter.date.$lt = toDate;
+            }
+        }
+
         const expenseFilter = { customerId: cid };
         if (from || to) {
             expenseFilter.date = {};
@@ -316,7 +392,7 @@ exports.getProfitReport = async (req, res) => {
             }
         }
 
-        const [purchaseInvoicesAgg, salesAgg, cogsAgg, expensesAgg] = await Promise.all([
+        const [purchaseInvoicesAgg, salesAgg, cogsAgg, returnsAgg, returnsCOGSAgg, expensesAgg] = await Promise.all([
             PurchaseInvoice.aggregate([
                 { $match: purchaseInvoiceFilter },
                 { $group: { _id: null, total: { $sum: "$grandTotal" } } }
@@ -329,6 +405,14 @@ exports.getProfitReport = async (req, res) => {
                 { $match: salesFilter },
                 { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
             ]),
+            Return.aggregate([
+                { $match: returnFilter },
+                { $group: { _id: null, total: { $sum: "$total" } } }
+            ]),
+            Return.aggregate([
+                { $match: returnFilter },
+                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+            ]),
             Expense.aggregate([
                 { $match: expenseFilter },
                 { $group: { _id: null, total: { $sum: "$amount" } } }
@@ -336,9 +420,13 @@ exports.getProfitReport = async (req, res) => {
         ]);
 
         const totalPurchases = purchaseInvoicesAgg[0]?.total || 0;
-        const totalSales = salesAgg[0]?.total || 0;
+        const grossSales = salesAgg[0]?.total || 0;
+        const totalReturns = returnsAgg[0]?.total || 0;
+        const totalSales = grossSales - totalReturns;
         const totalExpenses = expensesAgg[0]?.total || 0;
-        const totalCOGS = cogsAgg[0]?.total || 0;
+        const grossCOGS = cogsAgg[0]?.total || 0;
+        const returnsCOGS = returnsCOGSAgg[0]?.total || 0;
+        const totalCOGS = grossCOGS - returnsCOGS;
         const grossProfit = totalSales - totalCOGS;
         const netProfit = grossProfit - totalExpenses;
         const profitMargin = totalSales > 0 ? ((netProfit / totalSales) * 100).toFixed(2) : 0;
@@ -349,8 +437,12 @@ exports.getProfitReport = async (req, res) => {
                 customerId: cid,
                 period: { from: from || 'All time', to: to || 'Now' },
                 totalSales,
+                grossSales,
+                totalReturns,
                 totalPurchases,
                 totalCOGS,
+                grossCOGS,
+                returnsCOGS,
                 totalExpenses,
                 grossProfit,
                 netProfit,
