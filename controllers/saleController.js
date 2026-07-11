@@ -2,6 +2,8 @@ const SaleInvoice = require('../models/SaleInvoice');
 const Item = require('../models/Item');
 const exportExcel = require('../utils/exportExcel');
 const InvoiceFile = require('../models/InvoiceFile');
+const StockMovement = require('../models/StockMovement');
+const mongoose = require('mongoose');
 
 exports.exportSalesToExcel = async (req, res) => {
     try {
@@ -46,22 +48,100 @@ exports.exportSalesToExcel = async (req, res) => {
 };
 
 exports.addSaleInvoice = async (req, res) => {
+    const session = await mongoose.startSession();
+    const runWithTransaction = async () => {
+        session.startTransaction();
+        const { modelNumber, name, quantity, price, sellerName, total: frontTotal } = req.body;
+
+        const item = await Item.findOne({ modelNumber, customerId: req.customerId }).session(session);
+        if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود', data: null });
+
+        if (item.quantity < quantity) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'الكمية غير متوفرة', data: null });
+        }
+
+        item.quantity -= quantity;
+        await item.save({ session });
+
+        const total = frontTotal || quantity * price;
+        const unitCost = item.costPrice || item.price || 0;
+
+        const invoice = await SaleInvoice.create(
+            [
+                {
+                    customerId: req.customerId,
+                    modelNumber,
+                    name,
+                    quantity,
+                    price,
+                    total,
+                    sellerName,
+                    costPrice: unitCost
+                }
+            ],
+            { session }
+        );
+
+        const created = invoice[0];
+
+        await StockMovement.create(
+            [
+                {
+                    customerId: req.customerId,
+                    itemId: item._id,
+                    qty: Number(quantity),
+                    direction: 'OUT',
+                    reason: 'SALE',
+                    referenceType: 'SALE_INVOICE',
+                    referenceId: created._id,
+                    unitCost: unitCost,
+                    date: created.createdAt || new Date(),
+                }
+            ],
+            { session }
+        );
+
+        await session.commitTransaction();
+        return res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: created });
+    };
+
+    try {
+        return await runWithTransaction();
+    } catch (error) {
+        const msg = String(error?.message || '');
+        if (msg.includes('Transaction numbers are only allowed') || msg.includes('replica set')) {
+            try {
+                session.endSession();
+            } catch (_) {}
+            return await exports.addSaleInvoiceNoTx(req, res);
+        }
+        try {
+            await session.abortTransaction();
+        } catch (_) {}
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    } finally {
+        try {
+            session.endSession();
+        } catch (_) {}
+    }
+};
+
+exports.addSaleInvoiceNoTx = async (req, res) => {
     try {
         const { modelNumber, name, quantity, price, sellerName, total: frontTotal } = req.body;
 
-        // البحث عن العنصر مع تطبيق عزل العميل
         const item = await Item.findOne({ modelNumber, customerId: req.customerId });
-
         if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود', data: null });
 
         if (item.quantity < quantity) return res.status(400).json({ status: false, message: 'الكمية غير متوفرة', data: null });
         item.quantity -= quantity;
-
         await item.save();
 
         const total = frontTotal || quantity * price;
+        const unitCost = item.costPrice || item.price || 0;
 
-        const invoice = await SaleInvoice.create({
+        const created = await SaleInvoice.create({
             customerId: req.customerId,
             modelNumber,
             name,
@@ -69,11 +149,24 @@ exports.addSaleInvoice = async (req, res) => {
             price,
             total,
             sellerName,
-            costPrice: item.costPrice || item.price
+            costPrice: unitCost
         });
-        res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: invoice });
+
+        await StockMovement.create({
+            customerId: req.customerId,
+            itemId: item._id,
+            qty: Number(quantity),
+            direction: 'OUT',
+            reason: 'SALE',
+            referenceType: 'SALE_INVOICE',
+            referenceId: created._id,
+            unitCost: unitCost,
+            date: created.createdAt || new Date(),
+        });
+
+        return res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: created });
     } catch (error) {
-        res.status(500).json({ status: false, message: error.message, data: null });
+        return res.status(500).json({ status: false, message: error.message, data: null });
     }
 };
 
@@ -144,52 +237,209 @@ exports.getSaleInvoices = async (req, res) => {
 };
 
 exports.updateSaleInvoice = async (req, res) => {
+    const session = await mongoose.startSession();
+    const runWithTransaction = async () => {
+        session.startTransaction();
+        const { id } = req.params;
+        const { quantity, price } = req.body;
+
+        const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId }).session(session);
+        if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
+
+        const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId }).session(session);
+        if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود' });
+
+        const oldQty = Number(sale.quantity);
+        const newQty = Number(quantity);
+        const delta = newQty - oldQty;
+
+        item.quantity += oldQty;
+        if (item.quantity < newQty) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'الكمية غير كافية' });
+        }
+        item.quantity -= newQty;
+        await item.save({ session });
+
+        sale.quantity = newQty;
+        sale.price = Number(price);
+        sale.total = newQty * Number(price);
+        await sale.save({ session });
+
+        if (delta !== 0) {
+            await StockMovement.create(
+                [
+                    {
+                        customerId: req.customerId,
+                        itemId: item._id,
+                        qty: Math.abs(delta),
+                        direction: delta > 0 ? 'OUT' : 'IN',
+                        reason: 'ADJUSTMENT',
+                        referenceType: 'SALE_INVOICE',
+                        referenceId: sale._id,
+                        unitCost: Number(sale.costPrice || 0),
+                        date: new Date(),
+                    }
+                ],
+                { session }
+            );
+        }
+
+        await session.commitTransaction();
+        return res.json({ status: true, message: 'تم تحديث الفاتورة', data: sale });
+    };
+
+    try {
+        return await runWithTransaction();
+    } catch (error) {
+        const msg = String(error?.message || '');
+        if (msg.includes('Transaction numbers are only allowed') || msg.includes('replica set')) {
+            try {
+                session.endSession();
+            } catch (_) {}
+            return await exports.updateSaleInvoiceNoTx(req, res);
+        }
+        try {
+            await session.abortTransaction();
+        } catch (_) {}
+        return res.status(500).json({ status: false, message: error.message });
+    } finally {
+        try {
+            session.endSession();
+        } catch (_) {}
+    }
+};
+
+exports.updateSaleInvoiceNoTx = async (req, res) => {
     try {
         const { id } = req.params;
         const { quantity, price } = req.body;
 
-        // التحقق من ملكية الفاتورة قبل التعديل
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId });
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
 
         const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId });
-        if (item) {
-            item.quantity += sale.quantity;
-            if (item.quantity < quantity) {
-                return res.status(400).json({ status: false, message: 'الكمية غير كافية' });
-            }
-            item.quantity -= quantity;
-            await item.save();
-        }
+        if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود' });
 
-        sale.quantity = quantity;
-        sale.price = price;
-        sale.total = quantity * price;
+        const oldQty = Number(sale.quantity);
+        const newQty = Number(quantity);
+        const delta = newQty - oldQty;
+
+        item.quantity += oldQty;
+        if (item.quantity < newQty) {
+            return res.status(400).json({ status: false, message: 'الكمية غير كافية' });
+        }
+        item.quantity -= newQty;
+        await item.save();
+
+        sale.quantity = newQty;
+        sale.price = Number(price);
+        sale.total = newQty * Number(price);
         await sale.save();
 
-        res.json({ status: true, message: 'تم تحديث الفاتورة', data: sale });
+        if (delta !== 0) {
+            await StockMovement.create({
+                customerId: req.customerId,
+                itemId: item._id,
+                qty: Math.abs(delta),
+                direction: delta > 0 ? 'OUT' : 'IN',
+                reason: 'ADJUSTMENT',
+                referenceType: 'SALE_INVOICE',
+                referenceId: sale._id,
+                unitCost: Number(sale.costPrice || 0),
+                date: new Date(),
+            });
+        }
+
+        return res.json({ status: true, message: 'تم تحديث الفاتورة', data: sale });
     } catch (error) {
-        res.status(500).json({ status: false, message: error.message });
+        return res.status(500).json({ status: false, message: error.message });
     }
 };
 
 exports.deleteSaleInvoice = async (req, res) => {
+    const session = await mongoose.startSession();
+    const runWithTransaction = async () => {
+        session.startTransaction();
+        const { id } = req.params;
+        const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId }).session(session);
+        if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
+
+        const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId }).session(session);
+        if (item) {
+            item.quantity += Number(sale.quantity);
+            await item.save({ session });
+            await StockMovement.create(
+                [
+                    {
+                        customerId: req.customerId,
+                        itemId: item._id,
+                        qty: Number(sale.quantity),
+                        direction: 'IN',
+                        reason: 'RETURN',
+                        referenceType: 'SALE_INVOICE',
+                        referenceId: sale._id,
+                        unitCost: Number(sale.costPrice || 0),
+                        date: new Date(),
+                    }
+                ],
+                { session }
+            );
+        }
+
+        await SaleInvoice.deleteOne({ _id: id, customerId: req.customerId }).session(session);
+        await session.commitTransaction();
+        return res.json({ status: true, message: 'تم حذف الفاتورة' });
+    };
+
+    try {
+        return await runWithTransaction();
+    } catch (error) {
+        const msg = String(error?.message || '');
+        if (msg.includes('Transaction numbers are only allowed') || msg.includes('replica set')) {
+            try {
+                session.endSession();
+            } catch (_) {}
+            return await exports.deleteSaleInvoiceNoTx(req, res);
+        }
+        try {
+            await session.abortTransaction();
+        } catch (_) {}
+        return res.status(500).json({ status: false, message: error.message });
+    } finally {
+        try {
+            session.endSession();
+        } catch (_) {}
+    }
+};
+
+exports.deleteSaleInvoiceNoTx = async (req, res) => {
     try {
         const { id } = req.params;
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId });
-
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
 
         const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId });
         if (item) {
-            item.quantity += sale.quantity;
+            item.quantity += Number(sale.quantity);
             await item.save();
+            await StockMovement.create({
+                customerId: req.customerId,
+                itemId: item._id,
+                qty: Number(sale.quantity),
+                direction: 'IN',
+                reason: 'RETURN',
+                referenceType: 'SALE_INVOICE',
+                referenceId: sale._id,
+                unitCost: Number(sale.costPrice || 0),
+                date: new Date(),
+            });
         }
 
-        await SaleInvoice.findByIdAndDelete(id);
-        res.json({ status: true, message: 'تم حذف الفاتورة' });
+        await SaleInvoice.deleteOne({ _id: id, customerId: req.customerId });
+        return res.json({ status: true, message: 'تم حذف الفاتورة' });
     } catch (error) {
-        res.status(500).json({ status: false, message: error.message });
+        return res.status(500).json({ status: false, message: error.message });
     }
 };
 
@@ -204,6 +454,17 @@ exports.bulkDeleteSaleInvoices = async (req, res) => {
                 if (item) {
                     item.quantity += sale.quantity;
                     await item.save();
+                    await StockMovement.create({
+                        customerId: req.customerId,
+                        itemId: item._id,
+                        qty: Number(sale.quantity),
+                        direction: 'IN',
+                        reason: 'RETURN',
+                        referenceType: 'SALE_INVOICE',
+                        referenceId: sale._id,
+                        unitCost: Number(sale.costPrice || 0),
+                        date: new Date(),
+                    });
                 }
                 await SaleInvoice.findByIdAndDelete(id);
             }

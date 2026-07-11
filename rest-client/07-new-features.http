@@ -1,0 +1,103 @@
+### Register a new user
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser_new",
+  "email": "test_new@example.com",
+  "password": "password123",
+  "companyName": "Test Company New"
+}
+
+### Login user and get token
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "testuser_new",
+  "password": "password123"
+}
+
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMzYyZTkxNmE0NmY3YTgyNzU3Njk5MyIsImlhdCI6MTc4MTkzNjExOSwiZXhwIjoxNzgyNTQwOTE5fQ.g6x2pOLvLAHt807u7IIxzRi-liPLoHbzXGBiB4gFIes
+
+### Get Summary Report (Updated)
+GET http://localhost:5000/api/reports/summary
+Authorization: Bearer {{token}}
+
+### Get Profit Report (Updated)
+GET http://localhost:5000/api/reports/profit
+Authorization: Bearer {{token}}
+
+### Create an Item with separate costPrice
+@name createItem
+POST http://localhost:5000/api/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "modelNumber": "ITEM-001-NEW",
+  "name": "New Test Item",
+  "quantity": 100,
+  "price": 150,
+  "costPrice": 100,
+  "customer": "Supplier A"
+}
+
+# @itemId = {{res.body.data._id}}
+ @itemId =  6a36303d3a93014b6e25005d
+### Update Item - Change price only (costPrice should remain 100)
+PUT http://localhost:5000/api/items/{{itemId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "price": 175
+}
+
+### Update Item - Change costPrice
+PUT http://localhost:5000/api/items/{{itemId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "costPrice": 110
+}
+
+### Create Inventory Adjustment (IN)
+POST http://localhost:5000/api/inventory-adjustments
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "itemId": "{{itemId}}",
+  "qtyDelta": 50,
+  "unitCost": 105,
+  "reason": "Stock Count Adjustment"
+}
+
+### Create Inventory Adjustment (OUT)
+POST http://localhost:5000/api/inventory-adjustments
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "itemId": "{{itemId}}",
+  "qtyDelta": -20,
+  "reason": "Damaged Goods"
+}
+
+### Get Stock Movements for an Item
+GET http://localhost:5000/api/reports/stock-movements?itemId={{itemId}}
+Authorization: Bearer {{token}}
+
+### Get Stock Movements with filters (e.g., direction=IN)
+GET http://localhost:5000/api/reports/stock-movements?direction=IN
+Authorization: Bearer {{token}}
+
+### Get Stock Movements with filters (e.g., reason=ADJUSTMENT)
+GET http://localhost:5000/api/reports/stock-movements?reason=ADJUSTMENT
+Authorization: Bearer {{token}}
+
+### Get Stock Movements with pagination (page 1, limit 2)
+GET http://localhost:5000/api/reports/stock-movements?page=1&limit=2
+Authorization: Bearer {{token}}

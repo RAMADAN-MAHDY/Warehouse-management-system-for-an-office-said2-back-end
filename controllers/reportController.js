@@ -1,7 +1,10 @@
+const mongoose = require('mongoose');
 const Item = require('../models/Item');
 const SaleInvoice = require('../models/SaleInvoice');
 const Expense = require('../models/Expense');
-const Purchase = require('../models/Purchase');
+const StockMovement = require('../models/StockMovement');
+
+const PurchaseInvoice = require('../models/PurchaseInvoice');
 
 /**
  * ملخص شامل للعميل الحالي
@@ -13,20 +16,25 @@ exports.getSummary = async (req, res) => {
 
         const [
             totalItemsCount,
-            totalPurchasesAgg,
+            totalPurchaseInvoicesAgg,
             totalSalesAgg,
+            totalCOGSAgg,
             expensesList,
             recentSales,
             lowStockItems
         ] = await Promise.all([
             Item.countDocuments({ customerId: cid }),
-            Purchase.aggregate([
-                { $match: { customerId: cid } },
-                { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
+            PurchaseInvoice.aggregate([
+                { $match: { customerId: cid, status: 'posted' } },
+                { $group: { _id: null, total: { $sum: "$grandTotal" }, count: { $sum: 1 } } }
             ]),
             SaleInvoice.aggregate([
                 { $match: { customerId: cid } },
                 { $group: { _id: null, total: { $sum: "$total" }, count: { $sum: 1 } } }
+            ]),
+            SaleInvoice.aggregate([
+                { $match: { customerId: cid } },
+                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
             ]),
             Expense.find({ customerId: cid }).lean(),
             SaleInvoice.find({ customerId: cid }).sort({ createdAt: -1 }).limit(5).lean(),
@@ -35,8 +43,9 @@ exports.getSummary = async (req, res) => {
 
         const totalExpenses = expensesList.reduce((sum, e) => sum + e.amount, 0);
         const totalSales = totalSalesAgg[0]?.total || 0;
-        const totalPurchases = totalPurchasesAgg[0]?.total || 0;
-        const netProfit = totalSales - totalPurchases - totalExpenses;
+        const totalCOGS = totalCOGSAgg[0]?.total || 0;
+        const totalPurchaseInvoices = totalPurchaseInvoicesAgg[0]?.total || 0;
+        const netProfit = totalSales - totalCOGS - totalExpenses;
 
         res.json({
             status: true,
@@ -50,8 +59,9 @@ exports.getSummary = async (req, res) => {
                 financials: {
                     totalSales,
                     salesCount: totalSalesAgg[0]?.count || 0,
-                    totalPurchases,
-                    purchasesCount: totalPurchasesAgg[0]?.count || 0,
+                    totalCOGS,
+                    totalPurchases: totalPurchaseInvoices,
+                    purchasesCount: totalPurchaseInvoicesAgg[0]?.count || 0,
                     totalExpenses,
                     netProfit
                 },
@@ -64,13 +74,69 @@ exports.getSummary = async (req, res) => {
     }
 };
 
+/**
+ * تقرير حركة المخزون مع فلاتر وتصفح صفحات
+ * GET /api/reports/stock-movements?itemId=&direction=&reason=&from=&to=&page=1&limit=50
+ */
+exports.getStockMovements = async (req, res) => {
+    try {
+        const cid = req.customerId;
+        const { itemId, direction, reason, from, to, page = 1, limit = 50 } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(200, Math.max(1, parseInt(limit)));
+
+        const filter = { customerId: cid };
+        if (itemId) {
+            if (!mongoose.Types.ObjectId.isValid(itemId)) {
+                return res.status(400).json({ status: false, message: 'Invalid itemId', data: null });
+            }
+            filter.itemId = itemId;
+        }
+        if (direction) {
+            filter.direction = direction;
+        }
+        if (reason) {
+            filter.reason = reason;
+        }
+        if (from || to) {
+            filter.date = {};
+            if (from) filter.date.$gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                toDate.setDate(toDate.getDate() + 1);
+                filter.date.$lt = toDate;
+            }
+        }
+
+        const [movements, total] = await Promise.all([
+            StockMovement.find(filter)
+                .populate('itemId')
+                .sort({ date: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .lean(),
+            StockMovement.countDocuments(filter)
+        ]);
+
+        res.json({
+            status: true,
+            data: {
+                customerId: cid,
+                pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+                movements
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message });
+    }
+};
+
 exports.getProfitSummaryJson = async (req, res) => {
     try {
         const cid = req.customerId;
-        const purchases = await Purchase.find({ customerId: cid }).sort({ date: -1 }).limit(100).lean();
-        const totalPurchasesAgg = await Purchase.aggregate([
-            { $match: { customerId: cid } },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
+        const totalPurchaseInvoicesAgg = await PurchaseInvoice.aggregate([
+            { $match: { customerId: cid, status: 'posted' } },
+            { $group: { _id: null, total: { $sum: "$grandTotal" } } }
         ]);
         const totalSales = await SaleInvoice.aggregate([
             { $match: { customerId: cid } },
@@ -90,7 +156,7 @@ exports.getProfitSummaryJson = async (req, res) => {
         res.json({
             status: true,
             data: {
-                totalPurchases: totalPurchasesAgg[0]?.total || 0,
+                totalPurchases: totalPurchaseInvoicesAgg[0]?.total || 0,
                 totalSales: totalSales[0]?.total || 0,
                 totalCOGS: totalCOGS[0]?.total || 0,
                 netProfit,
@@ -217,17 +283,6 @@ exports.getProfitReport = async (req, res) => {
         const cid = req.customerId;
         const { from, to } = req.query;
 
-        const dateFilter = {};
-        if (from || to) {
-            dateFilter.date = {};
-            if (from) dateFilter.date.$gte = new Date(from);
-            if (to) {
-                const toDate = new Date(to);
-                toDate.setDate(toDate.getDate() + 1);
-                dateFilter.date.$lt = toDate;
-            }
-        }
-
         const salesFilter = { customerId: cid };
         if (from || to) {
             salesFilter.createdAt = {};
@@ -239,25 +294,52 @@ exports.getProfitReport = async (req, res) => {
             }
         }
 
-        const [purchasesAgg, salesAgg, expensesAgg] = await Promise.all([
-            Purchase.aggregate([
-                { $match: { customerId: cid, ...dateFilter } },
-                { $group: { _id: null, total: { $sum: "$amount" } } }
+        const expenseFilter = { customerId: cid };
+        if (from || to) {
+            expenseFilter.date = {};
+            if (from) expenseFilter.date.$gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                toDate.setDate(toDate.getDate() + 1);
+                expenseFilter.date.$lt = toDate;
+            }
+        }
+
+        const purchaseInvoiceFilter = { customerId: cid, status: 'posted' };
+        if (from || to) {
+            purchaseInvoiceFilter.date = {};
+            if (from) purchaseInvoiceFilter.date.$gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                toDate.setDate(toDate.getDate() + 1);
+                purchaseInvoiceFilter.date.$lt = toDate;
+            }
+        }
+
+        const [purchaseInvoicesAgg, salesAgg, cogsAgg, expensesAgg] = await Promise.all([
+            PurchaseInvoice.aggregate([
+                { $match: purchaseInvoiceFilter },
+                { $group: { _id: null, total: { $sum: "$grandTotal" } } }
             ]),
             SaleInvoice.aggregate([
                 { $match: salesFilter },
                 { $group: { _id: null, total: { $sum: "$total" } } }
             ]),
+            SaleInvoice.aggregate([
+                { $match: salesFilter },
+                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+            ]),
             Expense.aggregate([
-                { $match: { customerId: cid, ...dateFilter } },
+                { $match: expenseFilter },
                 { $group: { _id: null, total: { $sum: "$amount" } } }
             ])
         ]);
 
-        const totalPurchases = purchasesAgg[0]?.total || 0;
+        const totalPurchases = purchaseInvoicesAgg[0]?.total || 0;
         const totalSales = salesAgg[0]?.total || 0;
         const totalExpenses = expensesAgg[0]?.total || 0;
-        const grossProfit = totalSales - totalPurchases;
+        const totalCOGS = cogsAgg[0]?.total || 0;
+        const grossProfit = totalSales - totalCOGS;
         const netProfit = grossProfit - totalExpenses;
         const profitMargin = totalSales > 0 ? ((netProfit / totalSales) * 100).toFixed(2) : 0;
 
@@ -268,6 +350,7 @@ exports.getProfitReport = async (req, res) => {
                 period: { from: from || 'All time', to: to || 'Now' },
                 totalSales,
                 totalPurchases,
+                totalCOGS,
                 totalExpenses,
                 grossProfit,
                 netProfit,

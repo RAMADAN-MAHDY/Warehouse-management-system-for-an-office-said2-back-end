@@ -79,21 +79,10 @@ exports.searchItems = async (req, res) => {
 
 exports.addItem = async (req, res) => {
     try {
-        const { modelNumber, name, quantity, price, customer } = req.body;
+        const { modelNumber, name, quantity, price, customer, costPrice } = req.body;
         // إضافة customerId تلقائياً من بيانات المستخدم المسجّل
-        const item = await Item.create({ modelNumber, name, quantity, price, costPrice: price, customer, customerId: req.customerId });
+        const item = await Item.create({ modelNumber, name, quantity, price, costPrice: costPrice || 0, customer, customerId: req.customerId });
         const fullItem = await Item.findById(item._id).lean();
-        try {
-            await Purchase.create({
-                customerId: req.customerId,
-                description: `شراء ${fullItem.name} (${fullItem.modelNumber}) من ${fullItem.customer}`,
-                amount: Number(fullItem.price) * Number(fullItem.quantity),
-                type: 'purchase',
-                itemId: fullItem._id
-            });
-        } catch (e) {
-            console.error('Add Purchase ledger failed:', e);
-        }
         res.status(201).json({ status: true, message: 'Item added', data: fullItem });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
@@ -102,32 +91,21 @@ exports.addItem = async (req, res) => {
 
 exports.updateItem = async (req, res) => {
     try {
-        const { modelNumber, name, quantity, price, customer } = req.body;
+        const { modelNumber, name, quantity, price, customer, costPrice } = req.body;
+        const updateFields = {};
+        if (modelNumber !== undefined) updateFields.modelNumber = modelNumber;
+        if (name !== undefined) updateFields.name = name;
+        if (quantity !== undefined) updateFields.quantity = quantity;
+        if (price !== undefined) updateFields.price = price;
+        if (customer !== undefined) updateFields.customer = customer;
+        if (costPrice !== undefined) updateFields.costPrice = costPrice;
         // التحقق من ملكية العنصر وتحديثه
         const item = await Item.findOneAndUpdate(
             { _id: req.params.id, customerId: req.customerId },
-            { modelNumber, name, quantity, price, costPrice: price, customer },
+            updateFields,
             { new: true }
         );
         if (!item) return res.status(404).json({ status: false, message: 'Item not found', data: null });
-        try {
-            const updated = await Purchase.findOneAndUpdate(
-                { itemId: req.params.id, type: 'purchase', customerId: req.customerId },
-                { description: `تحديث شراء ${item.name} (${item.modelNumber}) من ${item.customer}`, amount: Number(item.price) * Number(item.quantity) },
-                { new: true }
-            );
-            if (!updated) {
-                await Purchase.create({
-                    customerId: req.customerId,
-                    description: `شراء ${item.name} (${item.modelNumber}) من ${item.customer}`,
-                    amount: Number(item.price) * Number(item.quantity),
-                    type: 'purchase',
-                    itemId: item._id
-                });
-            }
-        } catch (e) {
-            console.error('Update Purchase ledger failed:', e);
-        }
         res.status(200).json({ status: true, message: 'Item updated', data: item });
     } catch (error) {
         console.error('Update Item Error:', error);

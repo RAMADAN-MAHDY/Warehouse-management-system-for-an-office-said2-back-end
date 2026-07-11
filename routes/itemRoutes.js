@@ -14,7 +14,7 @@ const {
     deleteExpense
 } = require('../controllers/itemController');
 const validate = require('../middleware/validateMiddleware');
-const { itemSchema, expenseSchema } = require('../validations/itemValidation');
+const { itemCreateSchema, itemUpdateSchema, expenseSchema } = require('../validations/itemValidation');
 
 const { checkSubscription, checkLimit } = require('../middleware/subscriptionMiddleware');
 
@@ -24,8 +24,8 @@ router.use(checkSubscription);
 
 router.get('/', getAllItems);
 router.get('/search', searchItems);
-router.post('/', checkLimit('items'), validate(itemSchema), addItem);
-router.put('/:id', validate(itemSchema), updateItem);
+router.post('/', checkLimit('items'), validate(itemCreateSchema), addItem);
+router.put('/:id', validate(itemUpdateSchema), updateItem);
 router.delete('/:id', deleteItem);
 router.get('/export', exportToExcel);
 router.get('/download/:id', downloadExcel);

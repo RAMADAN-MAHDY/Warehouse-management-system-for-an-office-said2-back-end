@@ -16,7 +16,10 @@ const reportQuerySchema = Joi.object({
     limit: Joi.number().integer().min(1).max(200).optional(),
     groupBy: Joi.string().max(50).optional(),
     search: Joi.string().trim().max(100).allow('').optional(),
-    lowStock: Joi.string().valid('true', 'false').optional()
+    lowStock: Joi.string().valid('true', 'false').optional(),
+    itemId: Joi.string().optional(),
+    direction: Joi.string().valid('IN', 'OUT').optional(),
+    reason: Joi.string().valid('PURCHASE', 'SALE', 'ADJUSTMENT', 'RETURN', 'PURCHASE_CANCEL', 'OPENING_BALANCE').optional()
 });
 
 module.exports = {

@@ -9,7 +9,7 @@ const Subscription = require('../models/Subscription');
 const AuditLog = require('../models/AuditLog');
 const jwt = require('jsonwebtoken');
 
-beforeAll(async () => await dbHandler.connect());
+beforeAll(async () => await dbHandler.connect(), 30000);
 afterEach(async () => await dbHandler.clearDatabase());
 afterAll(async () => await dbHandler.closeDatabase());
 

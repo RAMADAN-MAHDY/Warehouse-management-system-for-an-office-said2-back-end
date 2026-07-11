@@ -6,7 +6,8 @@ const {
     getSummary,
     getSalesReport,
     getInventoryReport,
-    getProfitReport
+    getProfitReport,
+    getStockMovements
 } = require('../controllers/reportController');
 const validate = require('../middleware/validateMiddleware');
 const { reportQuerySchema } = require('../validations/reportValidation');
@@ -25,5 +26,8 @@ router.get('/inventory', validate(reportQuerySchema, 'query'), getInventoryRepor
 
 // GET /api/reports/profit - تقرير الأرباح
 router.get('/profit', validate(reportQuerySchema, 'query'), getProfitReport);
+
+// GET /api/reports/stock-movements - تقرير حركة المخزون
+router.get('/stock-movements', validate(reportQuerySchema, 'query'), getStockMovements);
 
 module.exports = router;

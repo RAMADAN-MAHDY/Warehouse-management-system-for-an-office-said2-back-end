@@ -9,6 +9,7 @@ const hpp = require('hpp');
 const mongoose = require('mongoose');
 const Sentry = require('@sentry/node');
 const { nodeProfilingIntegration } = require('@sentry/profiling-node');
+// const seedTestData = require('../scripts/seedTestData');
 
 const {
   validateEnv,
@@ -152,6 +153,7 @@ if (NODE_ENV !== 'test') {
 =========================== */
 
 app.get('/api/health', (req, res) => {
+  // seedTestData();
   res.json({
     status: 'ok',
     environment: NODE_ENV,
@@ -171,6 +173,9 @@ app.use('/api/items', protect, tenantMiddleware, checkSubscription, require('../
 app.use('/api/auth', require('../routes/authRoutes'));
 app.use('/api/sales', protect, tenantMiddleware, checkSubscription, require('../routes/saleRoutes'));
 app.use('/api/purchases', protect, tenantMiddleware, checkSubscription, require('../routes/purchaseRoutes'));
+app.use('/api/purchase-invoices', protect, tenantMiddleware, checkSubscription, require('../routes/purchaseInvoiceRoutes'));
+app.use('/api/inventory-adjustments', protect, tenantMiddleware, checkSubscription, require('../routes/inventoryAdjustmentRoutes'));
+app.use('/api/suppliers', protect, tenantMiddleware, checkSubscription, require('../routes/supplierRoutes'));
 app.use('/api/expenses', protect, tenantMiddleware, checkSubscription, require('../routes/expenseRoutes'));
 app.use('/api/excel-files', protect, tenantMiddleware, checkSubscription, require('../routes/excelRoutes'));
 app.use('/api/reports', protect, tenantMiddleware, checkSubscription, require('../routes/reportRoutes'));
