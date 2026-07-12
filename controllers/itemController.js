@@ -23,12 +23,11 @@ exports.deleteItem = async (req, res) => {
 exports.getAllItems = async (req, res) => {
     try {
         const { page = 1, limit = 10, lowStock } = req.query;
+        if (lowStock === 'true') {
+            return exports.getLowStockItems(req, res);
+        }
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const filter = { customerId: req.customerId };
-
-        if (lowStock === 'true') {
-            filter.quantity = { $lt: 5 };
-        }
 
         const total = await Item.countDocuments(filter);
         const stats = await Item.aggregate([
@@ -60,6 +59,82 @@ exports.getAllItems = async (req, res) => {
     }
 };
 
+exports.getLowStockItems = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, category, minDeficit, maxDeficit } = req.query;
+
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+        const skip = (pageNum - 1) * limitNum;
+
+        const match = { customerId: req.customerId };
+        if (category) {
+            const raw = String(category).trim();
+            const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+            if (parts.length > 1) match.category = { $in: parts };
+            else match.category = raw;
+        }
+
+        const minDef = minDeficit !== undefined && minDeficit !== '' ? Number(minDeficit) : undefined;
+        const maxDef = maxDeficit !== undefined && maxDeficit !== '' ? Number(maxDeficit) : undefined;
+
+        const basePipeline = [
+            { $match: match },
+            {
+                $addFields: {
+                    minQuantityResolved: { $ifNull: ['$minQuantity', 5] },
+                }
+            },
+            {
+                $addFields: {
+                    deficit: { $subtract: ['$minQuantityResolved', '$quantity'] },
+                    isLowStock: { $lt: ['$quantity', '$minQuantityResolved'] }
+                }
+            },
+            { $match: { isLowStock: true } }
+        ];
+
+        if (Number.isFinite(minDef) || Number.isFinite(maxDef)) {
+            const deficitFilter = {};
+            if (Number.isFinite(minDef)) deficitFilter.$gte = minDef;
+            if (Number.isFinite(maxDef)) deficitFilter.$lte = maxDef;
+            basePipeline.push({ $match: { deficit: deficitFilter } });
+        }
+
+        const [result] = await Item.aggregate([
+            ...basePipeline,
+            {
+                $facet: {
+                    data: [
+                        { $sort: { deficit: -1, quantity: 1, createdAt: -1 } },
+                        { $skip: skip },
+                        { $limit: limitNum },
+                        { $project: { minQuantityResolved: 0, isLowStock: 0 } }
+                    ],
+                    meta: [{ $count: 'total' }]
+                }
+            }
+        ]);
+
+        const total = result?.meta?.[0]?.total || 0;
+        const data = result?.data || [];
+
+        return res.status(200).json({
+            status: true,
+            message: 'Low stock items',
+            data,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum) || 1
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
 exports.searchItems = async (req, res) => {
     try {
         const { search: q } = req.query;
@@ -79,9 +154,19 @@ exports.searchItems = async (req, res) => {
 
 exports.addItem = async (req, res) => {
     try {
-        const { modelNumber, name, quantity, price, customer, costPrice } = req.body;
+        const { modelNumber, name, quantity, price, customer, costPrice, minQuantity, category } = req.body;
         // إضافة customerId تلقائياً من بيانات المستخدم المسجّل
-        const item = await Item.create({ modelNumber, name, quantity, price, costPrice: costPrice || 0, customer, customerId: req.customerId });
+        const item = await Item.create({
+            modelNumber,
+            name,
+            quantity,
+            price,
+            costPrice: costPrice || 0,
+            customer,
+            minQuantity: minQuantity ?? 5,
+            category: category || undefined,
+            customerId: req.customerId
+        });
         const fullItem = await Item.findById(item._id).lean();
         res.status(201).json({ status: true, message: 'Item added', data: fullItem });
     } catch (error) {
@@ -91,7 +176,7 @@ exports.addItem = async (req, res) => {
 
 exports.updateItem = async (req, res) => {
     try {
-        const { modelNumber, name, quantity, price, customer, costPrice } = req.body;
+        const { modelNumber, name, quantity, price, customer, costPrice, minQuantity, category } = req.body;
         const updateFields = {};
         if (modelNumber !== undefined) updateFields.modelNumber = modelNumber;
         if (name !== undefined) updateFields.name = name;
@@ -99,6 +184,8 @@ exports.updateItem = async (req, res) => {
         if (price !== undefined) updateFields.price = price;
         if (customer !== undefined) updateFields.customer = customer;
         if (costPrice !== undefined) updateFields.costPrice = costPrice;
+        if (minQuantity !== undefined) updateFields.minQuantity = minQuantity;
+        if (category !== undefined) updateFields.category = category || undefined;
         // التحقق من ملكية العنصر وتحديثه
         const item = await Item.findOneAndUpdate(
             { _id: req.params.id, customerId: req.customerId },
@@ -126,24 +213,14 @@ exports.exportToExcel = async (req, res) => {
             'اسم الصنف': item.name || 'N/A',
             'رقم الموديل': item.modelNumber || 'N/A',
             'الكمية': item.quantity || 0,
+            'الحد الأدنى': item.minQuantity ?? 5,
+            'الفئة': item.category || '',
             'السعر': item.price || 0,
             'اسم العميل': item.customer || 'N/A',
             'تاريخ الإضافة': item.createdAt ? item.createdAt.toISOString().slice(0, 10) : ''
         }));
 
         const buffer = exportExcel(data, 'المخزون');
-        const InvoiceFile = require('../models/InvoiceFile');
-        
-        try {
-            await InvoiceFile.create({ 
-                buffer, 
-                customerId: req.customerId,
-                createdAt: new Date()
-            });
-        } catch (dbError) {
-            console.error('Error saving InvoiceFile to DB:', dbError);
-            // We continue even if saving to DB fails, to let the user download the file
-        }
         
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=inventory.xlsx');
@@ -154,17 +231,67 @@ exports.exportToExcel = async (req, res) => {
     }
 };
 
-// Download Excel file from MongoDB
-exports.downloadExcel = async (req, res) => {
+exports.exportLowStockToExcel = async (req, res) => {
     try {
-        const InvoiceFile = require('../models/InvoiceFile');
-        const file = await InvoiceFile.findOne({ _id: req.params.id, customerId: req.customerId }).lean();
-        if (!file) return res.status(404).json({ status: false, message: 'File not found or unauthorized', data: null });
-        res.set({
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': 'attachment; filename="invoices.xlsx"',
-        });
-        res.send(file.buffer);
+        const { category, minDeficit, maxDeficit } = req.query;
+
+        const match = { customerId: req.customerId };
+        if (category) {
+            const raw = String(category).trim();
+            const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+            if (parts.length > 1) match.category = { $in: parts };
+            else match.category = raw;
+        }
+
+        const minDef = minDeficit !== undefined && minDeficit !== '' ? Number(minDeficit) : undefined;
+        const maxDef = maxDeficit !== undefined && maxDeficit !== '' ? Number(maxDeficit) : undefined;
+
+        const pipeline = [
+            { $match: match },
+            {
+                $addFields: {
+                    minQuantityResolved: { $ifNull: ['$minQuantity', 5] },
+                }
+            },
+            {
+                $addFields: {
+                    deficit: { $subtract: ['$minQuantityResolved', '$quantity'] },
+                    isLowStock: { $lt: ['$quantity', '$minQuantityResolved'] }
+                }
+            },
+            { $match: { isLowStock: true } }
+        ];
+
+        if (Number.isFinite(minDef) || Number.isFinite(maxDef)) {
+            const deficitFilter = {};
+            if (Number.isFinite(minDef)) deficitFilter.$gte = minDef;
+            if (Number.isFinite(maxDef)) deficitFilter.$lte = maxDef;
+            pipeline.push({ $match: { deficit: deficitFilter } });
+        }
+
+        pipeline.push({ $sort: { deficit: -1, quantity: 1, createdAt: -1 } });
+        pipeline.push({ $project: { minQuantityResolved: 0, isLowStock: 0 } });
+
+        const items = await Item.aggregate(pipeline);
+        if (!items || items.length === 0) {
+            return res.status(404).json({ status: false, message: 'لا توجد نواقص لتصديرها', data: null });
+        }
+
+        const data = items.map(item => ({
+            'اسم الصنف': item.name || 'N/A',
+            'رقم الموديل': item.modelNumber || 'N/A',
+            'الفئة': item.category || '',
+            'الكمية الحالية': item.quantity || 0,
+            'الحد الأدنى': item.minQuantity ?? 5,
+            'الكمية الناقصة': Math.max(0, Number(item.minQuantity ?? 5) - Number(item.quantity || 0)),
+            'السعر': item.price || 0,
+            'اسم العميل': item.customer || 'N/A',
+        }));
+
+        const buffer = exportExcel(data, 'نواقص المخزون');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=low-stock.xlsx');
+        res.send(buffer);
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
     }

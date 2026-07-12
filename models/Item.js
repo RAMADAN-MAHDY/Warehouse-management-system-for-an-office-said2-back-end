@@ -37,6 +37,19 @@ const itemSchema = new mongoose.Schema({
         default: 0,
         min: 0,
     },
+    minQuantity: {
+        type: Number,
+        required: true,
+        default: 5,
+        min: 0,
+    },
+    category: {
+        type: String,
+        required: false,
+        trim: true,
+        maxlength: 100,
+        index: true,
+    },
     createdAt: {
         type: Date,
         default: Date.now,
@@ -46,5 +59,6 @@ const itemSchema = new mongoose.Schema({
 // فهرس مركّب لأداء أفضل في البحث ضمن عميل محدد
 itemSchema.index({ customerId: 1, modelNumber: 1 });
 itemSchema.index({ customerId: 1, name: 1 });
+itemSchema.index({ customerId: 1, category: 1 });
 
 module.exports = mongoose.model('Item', itemSchema);

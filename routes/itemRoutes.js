@@ -4,11 +4,12 @@ const protect = require('../middleware/protectMiddleware');
 const tenantMiddleware = require('../middleware/tenantMiddleware');
 const {
     getAllItems,
+    getLowStockItems,
     searchItems,
     addItem,
     updateItem,
     exportToExcel,
-    downloadExcel,
+    exportLowStockToExcel,
     deleteItem,
     updateExpense,
     deleteExpense
@@ -23,12 +24,13 @@ router.use(protect, tenantMiddleware);
 router.use(checkSubscription);
 
 router.get('/', getAllItems);
+router.get('/low-stock', getLowStockItems);
+router.get('/low-stock/export', exportLowStockToExcel);
 router.get('/search', searchItems);
 router.post('/', checkLimit('items'), validate(itemCreateSchema), addItem);
 router.put('/:id', validate(itemUpdateSchema), updateItem);
 router.delete('/:id', deleteItem);
 router.get('/export', exportToExcel);
-router.get('/download/:id', downloadExcel);
 
 // مصروفات
 router.put('/expenses/:id', validate(expenseSchema), updateExpense);

@@ -24,6 +24,14 @@ const itemCreateSchema = Joi.object({
         'number.min': 'Cost price cannot be negative',
         'number.max': 'Cost price cannot exceed 10,000,000'
     }),
+    minQuantity: Joi.number().min(0).max(1000000).default(5).optional().messages({
+        'number.base': 'Min quantity must be a number',
+        'number.min': 'Min quantity cannot be negative',
+        'number.max': 'Min quantity cannot exceed 1,000,000'
+    }),
+    category: Joi.string().trim().max(100).allow('').optional().messages({
+        'string.max': 'Category cannot exceed 100 characters'
+    }),
     customer: Joi.string().trim().max(200).required().messages({
         'string.empty': 'Customer name is required',
         'string.max': 'Customer name cannot exceed 200 characters'
@@ -53,6 +61,14 @@ const itemUpdateSchema = Joi.object({
         'number.base': 'Cost price must be a number',
         'number.min': 'Cost price cannot be negative',
         'number.max': 'Cost price cannot exceed 10,000,000'
+    }),
+    minQuantity: Joi.number().min(0).max(1000000).optional().messages({
+        'number.base': 'Min quantity must be a number',
+        'number.min': 'Min quantity cannot be negative',
+        'number.max': 'Min quantity cannot exceed 1,000,000'
+    }),
+    category: Joi.string().trim().max(100).allow('').optional().messages({
+        'string.max': 'Category cannot exceed 100 characters'
     }),
     customer: Joi.string().trim().max(200).optional().messages({
         'string.empty': 'Customer name is required',
