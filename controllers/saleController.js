@@ -19,12 +19,13 @@ exports.exportSalesToExcel = async (req, res) => {
             filter.createdAt = { $gte: start, $lte: end };
         }
 
-        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 }).populate('clientId').lean();
+        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 }).populate('clientId').populate('representativeId').lean();
 
         const data = sales.map(sale => ({
             'رقم الفاتورة': sale._id.toString(),
             'التاريخ': sale.createdAt ? sale.createdAt.toISOString().slice(0, 10) : '',
-            'اسم العميل': (sale.clientId && sale.clientId.name) || sale.sellerName || 'N/A',
+            'اسم العميل': (sale.clientId && sale.clientId.name) || 'N/A',
+            'اسم المندوب': (sale.representativeId && sale.representativeId.name) || sale.sellerName || 'N/A',
             'المنتج': sale.name,
             'الموديل': sale.modelNumber,
             'الكمية': sale.quantity,
