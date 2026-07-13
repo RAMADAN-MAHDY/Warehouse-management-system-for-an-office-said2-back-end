@@ -17,4 +17,12 @@ const supplierCreateSchema = Joi.object({
     })
 });
 
-module.exports = { supplierCreateSchema };
+const supplierUpdateSchema = Joi.object({
+    name: Joi.string().trim().max(200).optional(),
+    phone: Joi.string().trim().max(50).optional().allow(''),
+    email: Joi.string().trim().email().max(200).optional().allow(''),
+    address: Joi.string().trim().max(500).optional().allow(''),
+    balance: Joi.number().min(0).optional() // Optional, in case we need to adjust balance
+});
+
+module.exports = { supplierCreateSchema, supplierUpdateSchema };

@@ -53,3 +53,53 @@ exports.createSupplier = async (req, res) => {
         res.status(500).json({ status: false, message: error.message, data: null });
     }
 };
+
+exports.getSupplier = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const doc = await Supplier.findOne({ _id: id, customerId: req.customerId }).lean();
+        if (!doc) {
+            return res.status(404).json({ status: false, message: 'Supplier not found', data: null });
+        }
+        res.status(200).json({ status: true, message: 'Supplier', data: doc });
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.updateSupplier = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, phone, email, address, balance } = req.body;
+        
+        const updatedDoc = await Supplier.findOneAndUpdate(
+            { _id: id, customerId: req.customerId },
+            { name, phone, email, address, balance },
+            { new: true }
+        );
+        
+        if (!updatedDoc) {
+            return res.status(404).json({ status: false, message: 'Supplier not found', data: null });
+        }
+        
+        res.status(200).json({ status: true, message: 'Supplier updated', data: updatedDoc });
+    } catch (error) {
+        if (error?.code === 11000) {
+            return res.status(409).json({ status: false, message: 'Supplier already exists', data: null });
+        }
+        res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.deleteSupplier = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const doc = await Supplier.findOneAndDelete({ _id: id, customerId: req.customerId });
+        if (!doc) {
+            return res.status(404).json({ status: false, message: 'Supplier not found', data: null });
+        }
+        res.status(200).json({ status: true, message: 'Supplier deleted', data: null });
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
