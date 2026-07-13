@@ -3,6 +3,7 @@ const PurchaseInvoice = require('../models/PurchaseInvoice');
 const Supplier = require('../models/Supplier');
 const Item = require('../models/Item');
 const StockMovement = require('../models/StockMovement');
+const { computePaymentStatus } = require('../utils/paymentStatus');
 
 const formatInvoiceNumber = () => {
     const now = new Date();
@@ -55,9 +56,11 @@ exports.createPurchaseInvoice = async (req, res) => {
         if (grandTotal < 0) {
             return res.status(400).json({ status: false, message: 'Invalid totals', data: null });
         }
-        if (Number(paidAmount) > grandTotal) {
+        const finalPaidAmount = Number(paidAmount);
+        if (finalPaidAmount > grandTotal) {
             return res.status(400).json({ status: false, message: 'Paid amount cannot exceed grand total', data: null });
         }
+        const paymentStatus = computePaymentStatus(grandTotal, finalPaidAmount);
 
         const invoice = await PurchaseInvoice.create(
             [
@@ -77,7 +80,8 @@ exports.createPurchaseInvoice = async (req, res) => {
                     tax,
                     discount,
                     grandTotal,
-                    paidAmount: Number(paidAmount),
+                    paidAmount: finalPaidAmount,
+                    paymentStatus,
                 }
             ],
             { session }
@@ -177,9 +181,11 @@ exports.createPurchaseInvoiceNoTx = async (req, res) => {
         if (grandTotal < 0) {
             return res.status(400).json({ status: false, message: 'Invalid totals', data: null });
         }
-        if (Number(paidAmount) > grandTotal) {
+        const finalPaidAmount = Number(paidAmount);
+        if (finalPaidAmount > grandTotal) {
             return res.status(400).json({ status: false, message: 'Paid amount cannot exceed grand total', data: null });
         }
+        const paymentStatus = computePaymentStatus(grandTotal, finalPaidAmount);
 
         const createdInvoice = await PurchaseInvoice.create({
             customerId: req.customerId,
@@ -197,7 +203,8 @@ exports.createPurchaseInvoiceNoTx = async (req, res) => {
             tax,
             discount,
             grandTotal,
-            paidAmount: Number(paidAmount),
+            paidAmount: finalPaidAmount,
+            paymentStatus,
         });
 
         for (const line of normalizedItems) {
@@ -408,6 +415,232 @@ exports.cancelPurchaseInvoice = async (req, res) => {
         try {
             session.endSession();
         } catch (_) {}
+    }
+};
+
+exports.updatePurchaseInvoice = async (req, res) => {
+    const session = await mongoose.startSession();
+    const runWithTransaction = async () => {
+        session.startTransaction();
+        const { id } = req.params;
+        const { supplierId, date, items, tax, discount, paidAmount } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'Invalid id', data: null });
+        }
+
+        const invoice = await PurchaseInvoice.findOne({ _id: id, customerId: req.customerId }).session(session);
+        if (!invoice) {
+            await session.abortTransaction();
+            return res.status(404).json({ status: false, message: 'Purchase invoice not found', data: null });
+        }
+        if (invoice.status === 'cancelled') {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'Cannot update cancelled invoice', data: null });
+        }
+
+        let finalSupplierId = invoice.supplierId;
+        if (supplierId !== undefined) {
+            if (!mongoose.Types.ObjectId.isValid(supplierId)) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'Invalid supplierId', data: null });
+            }
+            const supplier = await Supplier.findOne({ _id: supplierId, customerId: req.customerId }).session(session);
+            if (!supplier) {
+                await session.abortTransaction();
+                return res.status(404).json({ status: false, message: 'Supplier not found', data: null });
+            }
+            finalSupplierId = supplierId;
+        }
+
+        let finalItems = invoice.items;
+        let finalSubTotal = invoice.subTotal;
+        let finalGrandTotal = invoice.grandTotal;
+        let finalTax = invoice.tax;
+        let finalDiscount = invoice.discount;
+        if (items !== undefined) {
+            const { items: normalizedItems, subTotal, grandTotal } = computeTotals({ 
+                items, 
+                tax: tax ?? invoice.tax, 
+                discount: discount ?? invoice.discount 
+            });
+            if (grandTotal < 0) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'Invalid totals', data: null });
+            }
+            finalItems = normalizedItems;
+            finalSubTotal = subTotal;
+            finalGrandTotal = grandTotal;
+            finalTax = tax ?? invoice.tax;
+            finalDiscount = discount ?? invoice.discount;
+        } else {
+            if (tax !== undefined || discount !== undefined) {
+                finalTax = tax ?? invoice.tax;
+                finalDiscount = discount ?? invoice.discount;
+                finalSubTotal = invoice.subTotal;
+                finalGrandTotal = finalSubTotal + Number(finalTax) - Number(finalDiscount);
+                if (finalGrandTotal < 0) {
+                    await session.abortTransaction();
+                    return res.status(400).json({ status: false, message: 'Invalid totals', data: null });
+                }
+            }
+        }
+
+        const finalPaidAmount = paidAmount !== undefined ? Number(paidAmount) : invoice.paidAmount;
+        if (finalPaidAmount > finalGrandTotal) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed grand total', data: null });
+        }
+        const paymentStatus = computePaymentStatus(finalGrandTotal, finalPaidAmount);
+
+        const oldRemainingDebt = Number(invoice.grandTotal) - Number(invoice.paidAmount);
+        const newRemainingDebt = finalGrandTotal - finalPaidAmount;
+        const debtDelta = newRemainingDebt - oldRemainingDebt;
+        if (debtDelta !== 0) {
+            await Supplier.updateOne(
+                { _id: invoice.supplierId, customerId: req.customerId },
+                { $inc: { balance: debtDelta } },
+                { session }
+            );
+        }
+
+        invoice.supplierId = finalSupplierId;
+        invoice.date = date ? new Date(date) : invoice.date;
+        invoice.items = finalItems.map((it) => ({
+            itemId: it.itemId,
+            qty: it.qty,
+            unitCost: it.unitCost,
+            lineTotal: it.lineTotal,
+        }));
+        invoice.subTotal = finalSubTotal;
+        invoice.tax = finalTax;
+        invoice.discount = finalDiscount;
+        invoice.grandTotal = finalGrandTotal;
+        invoice.paidAmount = finalPaidAmount;
+        invoice.paymentStatus = paymentStatus;
+        await invoice.save({ session });
+
+        await session.commitTransaction();
+        return res.status(200).json({ status: true, message: 'Purchase invoice updated', data: invoice });
+    };
+
+    try {
+        return await runWithTransaction();
+    } catch (error) {
+        const msg = String(error?.message || '');
+        if (msg.includes('Transaction numbers are only allowed') || msg.includes('replica set')) {
+            try {
+                session.endSession();
+            } catch (_) {}
+            return await exports.updatePurchaseInvoiceNoTx(req, res);
+        }
+        try {
+            await session.abortTransaction();
+        } catch (_) {}
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    } finally {
+        try {
+            session.endSession();
+        } catch (_) {}
+    }
+};
+
+exports.updatePurchaseInvoiceNoTx = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { supplierId, date, items, tax, discount, paidAmount } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ status: false, message: 'Invalid id', data: null });
+        }
+
+        const invoice = await PurchaseInvoice.findOne({ _id: id, customerId: req.customerId });
+        if (!invoice) {
+            return res.status(404).json({ status: false, message: 'Purchase invoice not found', data: null });
+        }
+        if (invoice.status === 'cancelled') {
+            return res.status(400).json({ status: false, message: 'Cannot update cancelled invoice', data: null });
+        }
+
+        let finalSupplierId = invoice.supplierId;
+        if (supplierId !== undefined) {
+            if (!mongoose.Types.ObjectId.isValid(supplierId)) {
+                return res.status(400).json({ status: false, message: 'Invalid supplierId', data: null });
+            }
+            const supplier = await Supplier.findOne({ _id: supplierId, customerId: req.customerId });
+            if (!supplier) {
+                return res.status(404).json({ status: false, message: 'Supplier not found', data: null });
+            }
+            finalSupplierId = supplierId;
+        }
+
+        let finalItems = invoice.items;
+        let finalSubTotal = invoice.subTotal;
+        let finalGrandTotal = invoice.grandTotal;
+        let finalTax = invoice.tax;
+        let finalDiscount = invoice.discount;
+        if (items !== undefined) {
+            const { items: normalizedItems, subTotal, grandTotal } = computeTotals({ 
+                items, 
+                tax: tax ?? invoice.tax, 
+                discount: discount ?? invoice.discount 
+            });
+            if (grandTotal < 0) {
+                return res.status(400).json({ status: false, message: 'Invalid totals', data: null });
+            }
+            finalItems = normalizedItems;
+            finalSubTotal = subTotal;
+            finalGrandTotal = grandTotal;
+            finalTax = tax ?? invoice.tax;
+            finalDiscount = discount ?? invoice.discount;
+        } else {
+            if (tax !== undefined || discount !== undefined) {
+                finalTax = tax ?? invoice.tax;
+                finalDiscount = discount ?? invoice.discount;
+                finalSubTotal = invoice.subTotal;
+                finalGrandTotal = finalSubTotal + Number(finalTax) - Number(finalDiscount);
+                if (finalGrandTotal < 0) {
+                    return res.status(400).json({ status: false, message: 'Invalid totals', data: null });
+                }
+            }
+        }
+
+        const finalPaidAmount = paidAmount !== undefined ? Number(paidAmount) : invoice.paidAmount;
+        if (finalPaidAmount > finalGrandTotal) {
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed grand total', data: null });
+        }
+        const paymentStatus = computePaymentStatus(finalGrandTotal, finalPaidAmount);
+
+        const oldRemainingDebt = Number(invoice.grandTotal) - Number(invoice.paidAmount);
+        const newRemainingDebt = finalGrandTotal - finalPaidAmount;
+        const debtDelta = newRemainingDebt - oldRemainingDebt;
+        if (debtDelta !== 0) {
+            await Supplier.updateOne(
+                { _id: invoice.supplierId, customerId: req.customerId },
+                { $inc: { balance: debtDelta } }
+            );
+        }
+
+        invoice.supplierId = finalSupplierId;
+        invoice.date = date ? new Date(date) : invoice.date;
+        invoice.items = finalItems.map((it) => ({
+            itemId: it.itemId,
+            qty: it.qty,
+            unitCost: it.unitCost,
+            lineTotal: it.lineTotal,
+        }));
+        invoice.subTotal = finalSubTotal;
+        invoice.tax = finalTax;
+        invoice.discount = finalDiscount;
+        invoice.grandTotal = finalGrandTotal;
+        invoice.paidAmount = finalPaidAmount;
+        invoice.paymentStatus = paymentStatus;
+        await invoice.save();
+
+        return res.status(200).json({ status: true, message: 'Purchase invoice updated', data: invoice });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
     }
 };
 

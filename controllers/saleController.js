@@ -4,6 +4,7 @@ const exportExcel = require('../utils/exportExcel');
 const InvoiceFile = require('../models/InvoiceFile');
 const StockMovement = require('../models/StockMovement');
 const Representative = require('../models/Representative');
+const { computePaymentStatus } = require('../utils/paymentStatus');
 const mongoose = require('mongoose');
 
 exports.exportSalesToExcel = async (req, res) => {
@@ -52,7 +53,7 @@ exports.addSaleInvoice = async (req, res) => {
     const session = await mongoose.startSession();
     const runWithTransaction = async () => {
         session.startTransaction();
-        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal } = req.body;
+        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal, paidAmount: reqPaidAmount } = req.body;
 
         let repIdToSave;
         let resolvedSellerName = sellerName;
@@ -83,6 +84,12 @@ exports.addSaleInvoice = async (req, res) => {
 
         const total = frontTotal || quantity * price;
         const unitCost = item.costPrice || item.price || 0;
+        const paidAmount = Number(reqPaidAmount || 0);
+        if (paidAmount > total) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed total', data: null });
+        }
+        const paymentStatus = computePaymentStatus(total, paidAmount);
 
         const invoice = await SaleInvoice.create(
             [
@@ -93,6 +100,8 @@ exports.addSaleInvoice = async (req, res) => {
                     quantity,
                     price,
                     total,
+                    paidAmount,
+                    paymentStatus,
                     sellerName: resolvedSellerName,
                     representativeId: repIdToSave,
                     costPrice: unitCost
@@ -147,7 +156,7 @@ exports.addSaleInvoice = async (req, res) => {
 
 exports.addSaleInvoiceNoTx = async (req, res) => {
     try {
-        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal } = req.body;
+        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal, paidAmount: reqPaidAmount } = req.body;
 
         let repIdToSave;
         let resolvedSellerName = sellerName;
@@ -172,6 +181,11 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
 
         const total = frontTotal || quantity * price;
         const unitCost = item.costPrice || item.price || 0;
+        const paidAmount = Number(reqPaidAmount || 0);
+        if (paidAmount > total) {
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed total', data: null });
+        }
+        const paymentStatus = computePaymentStatus(total, paidAmount);
 
         const created = await SaleInvoice.create({
             customerId: req.customerId,
@@ -180,6 +194,8 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             quantity,
             price,
             total,
+            paidAmount,
+            paymentStatus,
             sellerName: resolvedSellerName,
             representativeId: repIdToSave,
             costPrice: unitCost
@@ -274,7 +290,7 @@ exports.updateSaleInvoice = async (req, res) => {
     const runWithTransaction = async () => {
         session.startTransaction();
         const { id } = req.params;
-        const { quantity, price, sellerName, representativeId } = req.body;
+        const { quantity, price, sellerName, representativeId, paidAmount: reqPaidAmount } = req.body;
 
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId }).session(session);
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
@@ -317,9 +333,19 @@ exports.updateSaleInvoice = async (req, res) => {
         item.quantity -= newQty;
         await item.save({ session });
 
+        const total = newQty * Number(price);
+        const paidAmount = reqPaidAmount !== undefined ? Number(reqPaidAmount) : sale.paidAmount;
+        if (paidAmount > total) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed total' });
+        }
+        const paymentStatus = computePaymentStatus(total, paidAmount);
+
         sale.quantity = newQty;
         sale.price = Number(price);
-        sale.total = newQty * Number(price);
+        sale.total = total;
+        sale.paidAmount = paidAmount;
+        sale.paymentStatus = paymentStatus;
         sale.sellerName = resolvedSellerName;
         sale.representativeId = repIdToSave;
         await sale.save({ session });
@@ -371,7 +397,7 @@ exports.updateSaleInvoice = async (req, res) => {
 exports.updateSaleInvoiceNoTx = async (req, res) => {
     try {
         const { id } = req.params;
-        const { quantity, price, sellerName, representativeId } = req.body;
+        const { quantity, price, sellerName, representativeId, paidAmount: reqPaidAmount } = req.body;
 
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId });
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
@@ -411,9 +437,18 @@ exports.updateSaleInvoiceNoTx = async (req, res) => {
         item.quantity -= newQty;
         await item.save();
 
+        const total = newQty * Number(price);
+        const paidAmount = reqPaidAmount !== undefined ? Number(reqPaidAmount) : sale.paidAmount;
+        if (paidAmount > total) {
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed total' });
+        }
+        const paymentStatus = computePaymentStatus(total, paidAmount);
+
         sale.quantity = newQty;
         sale.price = Number(price);
-        sale.total = newQty * Number(price);
+        sale.total = total;
+        sale.paidAmount = paidAmount;
+        sale.paymentStatus = paymentStatus;
         sale.sellerName = resolvedSellerName;
         sale.representativeId = repIdToSave;
         await sale.save();

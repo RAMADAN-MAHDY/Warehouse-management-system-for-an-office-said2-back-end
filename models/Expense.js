@@ -8,6 +8,12 @@ const expenseSchema = new mongoose.Schema({
     },
     description: { type: String, required: true },
     amount: { type: Number, required: true, min: 0 },
+    paidAmount: { type: Number, default: 0, min: 0 },
+    paymentStatus: {
+        type: String,
+        enum: ['paid', 'partial', 'unpaid'],
+        default: 'unpaid'
+    },
     date: { type: Date, default: Date.now },
 });
 

@@ -12,6 +12,12 @@ const saleInvoiceSchema = new mongoose.Schema({
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, required: true, min: 0, default: 0 }, // إضافة سعر التكلفة
     total: { type: Number, required: true },
+    paidAmount: { type: Number, default: 0, min: 0 },
+    paymentStatus: {
+        type: String,
+        enum: ['paid', 'partial', 'unpaid'],
+        default: 'unpaid'
+    },
     createdAt: { type: Date, default: Date.now },
     sellerName: { type: String, required: false },
     representativeId: {
