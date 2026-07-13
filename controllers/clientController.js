@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Client = require('../models/Client');
+const SaleInvoice = require('../models/SaleInvoice');
 
 const normalizeName = (value) => {
     const str = String(value || '').trim();
@@ -141,6 +142,72 @@ exports.deleteClient = async (req, res) => {
         await doc.save();
 
         return res.status(200).json({ status: true, message: 'تم تعطيل العميل بنجاح', data: doc });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.getClientBalance = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ status: false, message: 'Invalid client id', data: null });
+        }
+
+        const client = await Client.findOne({ _id: id, customerId: req.customerId }).lean();
+        if (!client) {
+            return res.status(404).json({ status: false, message: 'العميل غير موجود', data: null });
+        }
+
+        // Aggregate financial summary
+        const summary = await SaleInvoice.aggregate([
+            { $match: { clientId: new mongoose.Types.ObjectId(id), customerId: req.customerId } },
+            {
+                $group: {
+                    _id: null,
+                    totalInvoiced: { $sum: '$total' },
+                    totalPaid: { $sum: '$paidAmount' },
+                    invoiceCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const { page = 1, limit = 10 } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+
+        const [invoices, totalCount] = await Promise.all([
+            SaleInvoice.find({ clientId: id, customerId: req.customerId })
+                .sort({ createdAt: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .lean(),
+            SaleInvoice.countDocuments({ clientId: id, customerId: req.customerId })
+        ]);
+
+        const fin = summary[0] || { totalInvoiced: 0, totalPaid: 0, invoiceCount: 0 };
+        const totalRemaining = fin.totalInvoiced - fin.totalPaid;
+
+        return res.status(200).json({
+            status: true,
+            message: 'Client balance',
+            data: {
+                client,
+                balance: {
+                    totalInvoiced: fin.totalInvoiced,
+                    totalPaid: fin.totalPaid,
+                    totalRemaining,
+                    invoiceCount: fin.invoiceCount
+                },
+                invoices,
+                pagination: {
+                    total: totalCount,
+                    page: pageNum,
+                    limit: limitNum,
+                    totalPages: Math.ceil(totalCount / limitNum)
+                }
+            }
+        });
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message, data: null });
     }

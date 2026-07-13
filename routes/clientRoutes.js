@@ -10,7 +10,8 @@ const {
     getClient,
     createClient,
     updateClient,
-    deleteClient
+    deleteClient,
+    getClientBalance
 } = require('../controllers/clientController');
 const { clientCreateSchema, clientUpdateSchema } = require('../validations/clientValidation');
 
@@ -18,6 +19,7 @@ router.use(protect, tenantMiddleware);
 router.use(checkSubscription);
 
 router.get('/', listClients);
+router.get('/:id/balance', getClientBalance);
 router.get('/:id', getClient);
 router.post('/', authorize('admin', 'editor'), validate(clientCreateSchema), createClient);
 router.put('/:id', authorize('admin', 'editor'), validate(clientUpdateSchema), updateClient);
