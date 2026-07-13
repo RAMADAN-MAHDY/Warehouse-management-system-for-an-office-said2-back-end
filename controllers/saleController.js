@@ -19,12 +19,12 @@ exports.exportSalesToExcel = async (req, res) => {
             filter.createdAt = { $gte: start, $lte: end };
         }
 
-        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 }).lean();
+        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 }).populate('clientId').lean();
 
         const data = sales.map(sale => ({
             'رقم الفاتورة': sale._id.toString(),
             'التاريخ': sale.createdAt ? sale.createdAt.toISOString().slice(0, 10) : '',
-            'اسم العميل': sale.sellerName || 'N/A',
+            'اسم العميل': (sale.clientId && sale.clientId.name) || sale.sellerName || 'N/A',
             'المنتج': sale.name,
             'الموديل': sale.modelNumber,
             'الكمية': sale.quantity,
@@ -53,7 +53,7 @@ exports.addSaleInvoice = async (req, res) => {
     const session = await mongoose.startSession();
     const runWithTransaction = async () => {
         session.startTransaction();
-        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal, paidAmount: reqPaidAmount } = req.body;
+        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal, paidAmount: reqPaidAmount, clientId } = req.body;
 
         let repIdToSave;
         let resolvedSellerName = sellerName;
@@ -69,6 +69,21 @@ exports.addSaleInvoice = async (req, res) => {
             }
             repIdToSave = rep._id;
             resolvedSellerName = rep.name;
+        }
+
+        let clientIdToSave;
+        if (clientId) {
+            if (!mongoose.Types.ObjectId.isValid(clientId)) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'Invalid clientId', data: null });
+            }
+            const clientExists = await mongoose.model('Client').findOne({ _id: clientId, customerId: req.customerId }).session(session);
+            if (!clientExists) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'العميل المختار غير موجود', data: null });
+            }
+            clientIdToSave = clientExists._id;
+            resolvedSellerName = clientExists.name;
         }
 
         const item = await Item.findOne({ modelNumber, customerId: req.customerId }).session(session);
@@ -103,6 +118,7 @@ exports.addSaleInvoice = async (req, res) => {
                     paidAmount,
                     paymentStatus,
                     sellerName: resolvedSellerName,
+                    clientId: clientIdToSave,
                     representativeId: repIdToSave,
                     costPrice: unitCost
                 }
@@ -156,7 +172,7 @@ exports.addSaleInvoice = async (req, res) => {
 
 exports.addSaleInvoiceNoTx = async (req, res) => {
     try {
-        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal, paidAmount: reqPaidAmount } = req.body;
+        const { modelNumber, name, quantity, price, sellerName, representativeId, total: frontTotal, paidAmount: reqPaidAmount, clientId } = req.body;
 
         let repIdToSave;
         let resolvedSellerName = sellerName;
@@ -170,6 +186,19 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             }
             repIdToSave = rep._id;
             resolvedSellerName = rep.name;
+        }
+
+        let clientIdToSave;
+        if (clientId) {
+            if (!mongoose.Types.ObjectId.isValid(clientId)) {
+                return res.status(400).json({ status: false, message: 'Invalid clientId', data: null });
+            }
+            const clientExists = await mongoose.model('Client').findOne({ _id: clientId, customerId: req.customerId });
+            if (!clientExists) {
+                return res.status(400).json({ status: false, message: 'العميل المختار غير موجود', data: null });
+            }
+            clientIdToSave = clientExists._id;
+            resolvedSellerName = clientExists.name;
         }
 
         const item = await Item.findOne({ modelNumber, customerId: req.customerId });
@@ -197,6 +226,7 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             paidAmount,
             paymentStatus,
             sellerName: resolvedSellerName,
+            clientId: clientIdToSave,
             representativeId: repIdToSave,
             costPrice: unitCost
         });
@@ -257,11 +287,12 @@ exports.getSaleInvoices = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
+            .populate('clientId')
             .lean();
 
         const sales = invoices.map(invoice => ({
             ...invoice,
-            customer: invoice.sellerName || 'N/A'
+            customer: (invoice.clientId && invoice.clientId.name) || invoice.sellerName || 'N/A'
         }));
 
         res.status(200).json({

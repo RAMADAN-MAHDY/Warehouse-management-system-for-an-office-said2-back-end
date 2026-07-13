@@ -20,6 +20,12 @@ const saleInvoiceSchema = new mongoose.Schema({
     },
     createdAt: { type: Date, default: Date.now },
     sellerName: { type: String, required: false },
+    clientId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Client',
+        required: false,
+        index: true,
+    },
     representativeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Representative',

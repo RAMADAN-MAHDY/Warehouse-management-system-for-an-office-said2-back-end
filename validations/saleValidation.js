@@ -21,6 +21,7 @@ const saleSchema = Joi.object({
     }),
     sellerName: Joi.string().trim().max(50).allow('').optional(),
     representativeId: Joi.string().trim().allow('', null).optional(),
+    clientId: Joi.string().trim().allow('', null).optional(),
     total: Joi.number().min(0).max(100000000).optional(),
     paidAmount: Joi.number().min(0).max(100000000).optional().default(0)
 });
@@ -44,6 +45,7 @@ const updateSaleSchema = Joi.object({
     }),
     sellerName: Joi.string().trim().max(50).allow('').optional(),
     representativeId: Joi.string().trim().allow('', null).optional(),
+    clientId: Joi.string().trim().allow('', null).optional(),
     total: Joi.number().min(0).max(100000000).optional(),
     paidAmount: Joi.number().min(0).max(100000000).optional()
 });
