@@ -3,6 +3,8 @@ const PurchaseInvoice = require('../models/PurchaseInvoice');
 const Supplier = require('../models/Supplier');
 const Item = require('../models/Item');
 const StockMovement = require('../models/StockMovement');
+const InvoiceFile = require('../models/InvoiceFile');
+const exportExcel = require('../utils/exportExcel');
 const { computePaymentStatus } = require('../utils/paymentStatus');
 
 const formatInvoiceNumber = () => {
@@ -757,5 +759,49 @@ exports.getPurchaseInvoicesBySupplier = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.exportPurchaseInvoicesToExcel = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        let filter = { customerId: req.customerId };
+
+        if (from || to) {
+            const start = from ? new Date(from) : new Date('1970-01-01');
+            const end = to ? new Date(to) : new Date();
+            end.setHours(23, 59, 59, 999);
+            filter.date = { $gte: start, $lte: end };
+        }
+
+        const invoices = await PurchaseInvoice.find(filter)
+            .populate('supplierId', 'name')
+            .sort({ date: -1 })
+            .lean();
+
+        const data = invoices.map(inv => ({
+            'رقم الفاتورة': inv.invoiceNumber,
+            'التاريخ': inv.date ? inv.date.toISOString().slice(0, 10) : '',
+            'المورد': inv.supplierId?.name || 'N/A',
+            'عدد الأصناف': inv.items?.length || 0,
+            'الإجمالي': inv.grandTotal,
+            'المدفوع': inv.paidAmount,
+            'حالة الدفع': inv.paymentStatus === 'paid' ? 'مدفوع' : inv.paymentStatus === 'partial' ? 'جزئي' : 'غير مدفوع',
+            'الحالة': inv.status === 'posted' ? 'مثبت' : 'ملغي'
+        }));
+
+        const buffer = exportExcel(data, 'فواتير المشتريات');
+
+        await InvoiceFile.create({
+            customerId: req.customerId,
+            buffer: buffer,
+            createdAt: new Date()
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=purchase-invoices-report.xlsx');
+        res.send(buffer);
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message });
     }
 };

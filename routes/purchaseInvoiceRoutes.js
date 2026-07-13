@@ -12,12 +12,14 @@ const {
     getPurchaseInvoice,
     cancelPurchaseInvoice,
     updatePurchaseInvoice,
-    getPurchaseInvoicesBySupplier
+    getPurchaseInvoicesBySupplier,
+    exportPurchaseInvoicesToExcel
 } = require('../controllers/purchaseInvoiceController');
 
 router.use(protect, tenantMiddleware);
 router.use(checkSubscription);
 
+router.get('/export', authorize('admin', 'editor'), exportPurchaseInvoicesToExcel);
 router.get('/', listPurchaseInvoices);
 router.get('/supplier/:supplierId', getPurchaseInvoicesBySupplier);
 router.get('/:id', getPurchaseInvoice);
