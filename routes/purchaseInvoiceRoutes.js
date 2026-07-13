@@ -4,7 +4,7 @@ const protect = require('../middleware/protectMiddleware');
 const tenantMiddleware = require('../middleware/tenantMiddleware');
 const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validateMiddleware');
-const { purchaseInvoiceCreateSchema } = require('../validations/purchaseInvoiceValidation');
+const { purchaseInvoiceCreateSchema, purchaseInvoiceUpdateSchema } = require('../validations/purchaseInvoiceValidation');
 const { checkSubscription } = require('../middleware/subscriptionMiddleware');
 const {
     createPurchaseInvoice,
@@ -20,7 +20,7 @@ router.use(checkSubscription);
 router.get('/', listPurchaseInvoices);
 router.get('/:id', getPurchaseInvoice);
 router.post('/', authorize('admin', 'editor'), validate(purchaseInvoiceCreateSchema), createPurchaseInvoice);
-router.put('/:id', authorize('admin', 'editor'), updatePurchaseInvoice);
+router.put('/:id', authorize('admin', 'editor'), validate(purchaseInvoiceUpdateSchema), updatePurchaseInvoice);
 router.post('/:id/cancel', authorize('admin', 'editor'), cancelPurchaseInvoice);
 
 module.exports = router;

@@ -21,4 +21,23 @@ const purchaseInvoiceCreateSchema = Joi.object({
         .required()
 });
 
-module.exports = { purchaseInvoiceCreateSchema };
+const purchaseInvoiceUpdateSchema = Joi.object({
+    invoiceNumber: Joi.string().trim().max(100).optional(),
+    supplierId: Joi.string().trim().optional(),
+    date: Joi.date().optional(),
+    tax: Joi.number().min(0).max(100000000).optional(),
+    discount: Joi.number().min(0).max(100000000).optional(),
+    paidAmount: Joi.number().min(0).max(100000000).optional(),
+    items: Joi.array()
+        .min(1)
+        .items(
+            Joi.object({
+                itemId: Joi.string().trim().required(),
+                qty: Joi.number().greater(0).max(100000000).required(),
+                unitCost: Joi.number().min(0).max(100000000).required(),
+            })
+        )
+        .optional()
+});
+
+module.exports = { purchaseInvoiceCreateSchema, purchaseInvoiceUpdateSchema };
