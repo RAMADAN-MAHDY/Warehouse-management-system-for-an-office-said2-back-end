@@ -725,3 +725,37 @@ exports.cancelPurchaseInvoiceNoTx = async (req, res) => {
         return res.status(500).json({ status: false, message: error.message, data: null });
     }
 };
+
+exports.getPurchaseInvoicesBySupplier = async (req, res) => {
+    try {
+        const { supplierId } = req.params;
+        const { page = 1, limit = 20 } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+        const filter = { customerId: req.customerId, supplierId };
+
+        const [data, total] = await Promise.all([
+            PurchaseInvoice.find(filter)
+                .populate('supplierId')
+                .sort({ date: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .lean(),
+            PurchaseInvoice.countDocuments(filter)
+        ]);
+
+        res.status(200).json({
+            status: true,
+            message: 'Purchase invoices by supplier',
+            data,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};

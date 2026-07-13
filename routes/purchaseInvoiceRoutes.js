@@ -11,13 +11,15 @@ const {
     listPurchaseInvoices,
     getPurchaseInvoice,
     cancelPurchaseInvoice,
-    updatePurchaseInvoice
+    updatePurchaseInvoice,
+    getPurchaseInvoicesBySupplier
 } = require('../controllers/purchaseInvoiceController');
 
 router.use(protect, tenantMiddleware);
 router.use(checkSubscription);
 
 router.get('/', listPurchaseInvoices);
+router.get('/supplier/:supplierId', getPurchaseInvoicesBySupplier);
 router.get('/:id', getPurchaseInvoice);
 router.post('/', authorize('admin', 'editor'), validate(purchaseInvoiceCreateSchema), createPurchaseInvoice);
 router.put('/:id', authorize('admin', 'editor'), validate(purchaseInvoiceUpdateSchema), updatePurchaseInvoice);

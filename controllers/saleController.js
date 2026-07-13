@@ -591,3 +591,36 @@ exports.bulkDeleteSaleInvoices = async (req, res) => {
         res.status(500).json({ status: false, message: error.message });
     }
 };
+
+exports.getSalesByRepresentative = async (req, res) => {
+    try {
+        const { representativeId } = req.params;
+        const { page = 1, limit = 20 } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+        const filter = { customerId: req.customerId, representativeId };
+
+        const [data, total] = await Promise.all([
+            SaleInvoice.find(filter)
+                .sort({ createdAt: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .lean(),
+            SaleInvoice.countDocuments(filter)
+        ]);
+
+        res.status(200).json({
+            status: true,
+            message: 'Sales by representative',
+            data,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
