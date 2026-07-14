@@ -142,3 +142,79 @@ exports.deleteRepresentative = async (req, res) => {
     }
 };
 
+exports.getRepresentativeCommissionReport = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { from, to } = req.query;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ status: false, message: 'Invalid representative id', data: null });
+        }
+
+        const rep = await Representative.findOne({ _id: id, customerId: req.customerId }).lean();
+        if (!rep) {
+            return res.status(404).json({ status: false, message: 'المندوب غير موجود', data: null });
+        }
+
+        const filter = { representativeId: id, customerId: req.customerId };
+        if (from || to) {
+            filter.createdAt = {};
+            if (from) filter.createdAt.$gte = new Date(from);
+            if (to) {
+                const endDate = new Date(to);
+                endDate.setHours(23, 59, 59, 999);
+                filter.createdAt.$lte = endDate;
+            }
+        }
+
+        const SaleInvoice = mongoose.model('SaleInvoice');
+        const sales = await SaleInvoice.find(filter).sort({ createdAt: -1 }).populate('clientId').lean();
+
+        let totalSales = 0;
+        let totalPaid = 0;
+        let totalRemaining = 0;
+        let totalCommission = 0;
+        let collectedCommission = 0;
+
+        const rate = (rep.commissionRate || 0) / 100;
+
+        const detailedSales = sales.map(sale => {
+            const comm = sale.total * rate;
+            const collectedComm = sale.paidAmount * rate;
+            
+            totalSales += sale.total;
+            totalPaid += sale.paidAmount;
+            totalRemaining += (sale.total - sale.paidAmount);
+            totalCommission += comm;
+            collectedCommission += collectedComm;
+
+            return {
+                ...sale,
+                commission: comm,
+                collectedCommission: collectedComm,
+                remainingAmount: sale.total - sale.paidAmount
+            };
+        });
+
+        return res.status(200).json({
+            status: true,
+            message: 'Commission Report Fetched',
+            data: {
+                representative: rep,
+                summary: {
+                    totalSales,
+                    totalPaid,
+                    totalRemaining,
+                    totalCommission,
+                    collectedCommission,
+                    pendingCommission: totalCommission - collectedCommission,
+                    commissionRate: rep.commissionRate
+                },
+                sales: detailedSales
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+

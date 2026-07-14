@@ -10,7 +10,8 @@ const {
     getRepresentative,
     createRepresentative,
     updateRepresentative,
-    deleteRepresentative
+    deleteRepresentative,
+    getRepresentativeCommissionReport
 } = require('../controllers/representativeController');
 const { representativeCreateSchema, representativeUpdateSchema } = require('../validations/representativeValidation');
 
@@ -19,6 +20,7 @@ router.use(checkSubscription);
 
 router.get('/', listRepresentatives);
 router.get('/:id', getRepresentative);
+router.get('/:id/commission-report', getRepresentativeCommissionReport);
 router.post('/', authorize('admin', 'editor'), validate(representativeCreateSchema), createRepresentative);
 router.put('/:id', authorize('admin', 'editor'), validate(representativeUpdateSchema), updateRepresentative);
 router.delete('/:id', authorize('admin'), deleteRepresentative);
