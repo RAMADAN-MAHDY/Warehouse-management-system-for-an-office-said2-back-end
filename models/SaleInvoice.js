@@ -32,7 +32,7 @@ const saleInvoiceSchema = new mongoose.Schema({
         required: false,
         index: true,
     },
-});
+}, { timestamps: true });
 
 saleInvoiceSchema.index({ customerId: 1, createdAt: -1 });
 

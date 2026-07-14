@@ -322,3 +322,58 @@ exports.deleteExpense = async (req, res) => {
         res.status(500).json({ status: false, message: error.message, data: null });
     }
 };
+
+exports.getItemMovements = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { page = 1, limit = 20, from, to } = req.query;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ status: false, message: 'Invalid item id', data: null });
+        }
+
+        const item = await Item.findOne({ _id: id, customerId: req.customerId }).lean();
+        if (!item) {
+            return res.status(404).json({ status: false, message: 'المنتج غير موجود', data: null });
+        }
+
+        const filter = { itemId: id, customerId: req.customerId };
+        if (from || to) {
+            filter.date = {};
+            if (from) filter.date.$gte = new Date(from);
+            if (to) {
+                const endDate = new Date(to);
+                endDate.setHours(23, 59, 59, 999);
+                filter.date.$lte = endDate;
+            }
+        }
+
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+
+        const [movements, total] = await Promise.all([
+            mongoose.model('StockMovement').find(filter)
+                .sort({ date: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .lean(),
+            mongoose.model('StockMovement').countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            status: true,
+            message: 'حركات الصنف المالي والكمي',
+            data: {
+                item,
+                movements,
+                pagination: {
+                    total,
+                    page: pageNum,
+                    limit: limitNum,
+                    totalPages: Math.ceil(total / limitNum)
+                }
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};

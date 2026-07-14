@@ -51,7 +51,7 @@ const checkSubscription = async (req, res, next) => {
         next();
     } catch (error) {
         console.error('Subscription Middleware Error:', error);
-        next(); // السماح بالمرور في حالة حدوث خطأ تقني غير متوقع لتجنب تعطل النظام
+        return res.status(500).json({ status: false, message: 'حدث خطأ أثناء فحص حالة الاشتراك', error: error.message });
     }
 };
 

@@ -6,6 +6,7 @@ const StockMovement = require('../models/StockMovement');
 const Representative = require('../models/Representative');
 const { computePaymentStatus } = require('../utils/paymentStatus');
 const mongoose = require('mongoose');
+const { checkAndNotifyLowStock } = require('./notificationController');
 
 exports.exportSalesToExcel = async (req, res) => {
     try {
@@ -98,7 +99,7 @@ exports.addSaleInvoice = async (req, res) => {
         item.quantity -= quantity;
         await item.save({ session });
 
-        const total = frontTotal || quantity * price;
+        const total = quantity * price;
         const unitCost = item.costPrice || item.price || 0;
         const paidAmount = Number(reqPaidAmount || 0);
         if (paidAmount > total) {
@@ -147,6 +148,7 @@ exports.addSaleInvoice = async (req, res) => {
         );
 
         await session.commitTransaction();
+        checkAndNotifyLowStock(item, req.customerId);
         return res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: created });
     };
 
@@ -209,7 +211,7 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
         item.quantity -= quantity;
         await item.save();
 
-        const total = frontTotal || quantity * price;
+        const total = quantity * price;
         const unitCost = item.costPrice || item.price || 0;
         const paidAmount = Number(reqPaidAmount || 0);
         if (paidAmount > total) {
@@ -244,6 +246,7 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             date: created.createdAt || new Date(),
         });
 
+        checkAndNotifyLowStock(item, req.customerId);
         return res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: created });
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message, data: null });

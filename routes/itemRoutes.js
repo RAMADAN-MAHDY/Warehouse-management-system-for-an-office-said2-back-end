@@ -12,11 +12,11 @@ const {
     exportLowStockToExcel,
     deleteItem,
     updateExpense,
-    deleteExpense
+    deleteExpense,
+    getItemMovements
 } = require('../controllers/itemController');
 const validate = require('../middleware/validateMiddleware');
 const { itemCreateSchema, itemUpdateSchema, expenseSchema } = require('../validations/itemValidation');
-
 const { checkSubscription, checkLimit } = require('../middleware/subscriptionMiddleware');
 
 // تطبيق حماية JWT وعزل العميل على جميع المسارات
@@ -27,6 +27,7 @@ router.get('/', getAllItems);
 router.get('/low-stock', getLowStockItems);
 router.get('/low-stock/export', exportLowStockToExcel);
 router.get('/search', searchItems);
+router.get('/:id/movements', getItemMovements);
 router.post('/', checkLimit('items'), validate(itemCreateSchema), addItem);
 router.put('/:id', validate(itemUpdateSchema), updateItem);
 router.delete('/:id', deleteItem);

@@ -85,3 +85,29 @@ exports.createNotification = async (recipientId, message, type, data = {}, sende
         console.error('Error creating notification:', error);
     }
 };
+
+exports.checkAndNotifyLowStock = async (item, customerId) => {
+    try {
+        const minQty = item.minQuantity !== undefined ? item.minQuantity : 5;
+        if (item.quantity < minQty) {
+            // Check if there is already an unread alert for this item to avoid spamming
+            const exists = await Notification.findOne({
+                recipientId: customerId,
+                isRead: false,
+                type: 'system_alert',
+                'data.itemId': item._id.toString()
+            });
+
+            if (!exists) {
+                await exports.createNotification(
+                    customerId,
+                    `تنبيه مخزون: كمية المنتج "${item.name}" (موديل: ${item.modelNumber}) منخفضة جداً (${item.quantity} قطع متبقية). الحد الأدنى هو ${minQty}.`,
+                    'system_alert',
+                    { itemId: item._id, quantity: item.quantity, minQuantity: minQty }
+                );
+            }
+        }
+    } catch (err) {
+        console.error('Error checking low stock:', err);
+    }
+};

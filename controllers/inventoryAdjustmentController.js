@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const InventoryAdjustment = require('../models/InventoryAdjustment');
 const Item = require('../models/Item');
 const StockMovement = require('../models/StockMovement');
+const { checkAndNotifyLowStock } = require('./notificationController');
 
 const recalcWeightedAverageOnIn = ({ oldQty, oldAvgCost, inQty, inUnitCost }) => {
     const oldTotal = oldQty * oldAvgCost;
@@ -48,6 +49,8 @@ exports.createInventoryAdjustment = async (req, res) => {
         }
 
         await item.save({ session });
+        checkAndNotifyLowStock(item, req.customerId);
+
 
         const doc = await InventoryAdjustment.create(
             [
@@ -140,6 +143,7 @@ exports.createInventoryAdjustmentNoTx = async (req, res) => {
             item.quantity = newStock;
         }
         await item.save();
+        checkAndNotifyLowStock(item, req.customerId);
 
         const created = await InventoryAdjustment.create({
             customerId: req.customerId,
