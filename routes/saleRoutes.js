@@ -9,7 +9,8 @@ const {
     deleteSaleInvoice,
     bulkDeleteSaleInvoices,
     exportSalesToExcel,
-    getSalesByRepresentative
+    getSalesByRepresentative,
+    getSaleInvoiceAuditLogs
 } = require('../controllers/saleController');
 const validate = require('../middleware/validateMiddleware');
 const { saleSchema, updateSaleSchema, bulkDeleteSchema } = require('../validations/saleValidation');
@@ -22,6 +23,7 @@ router.use(checkSubscription);
 
 router.get('/export', exportSalesToExcel);
 router.get('/representative/:representativeId', getSalesByRepresentative);
+router.get('/:id/audit-logs', getSaleInvoiceAuditLogs);
 router.post('/', checkLimit('sales'), validate(saleSchema), addSaleInvoice);
 router.get('/', getSaleInvoices);
 router.put('/:id', validate(updateSaleSchema), updateSaleInvoice);

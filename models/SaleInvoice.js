@@ -21,6 +21,7 @@ const saleInvoiceSchema = new mongoose.Schema({
     },
     createdAt: { type: Date, default: Date.now },
     sellerName: { type: String, required: false },
+    clientName: { type: String, required: false, trim: true },
     clientId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Client',

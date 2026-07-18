@@ -12,6 +12,8 @@ const schema = new mongoose.Schema({
         required: true 
         // Removing enum for more flexibility as the system grows
     },
+    referenceType: { type: String, index: true },
+    referenceId: { type: mongoose.Schema.Types.ObjectId, index: true },
     details: { type: Object }, // To store action-specific details
     changes: { type: Object }, // To store old/new values
     ipAddress: { type: String },

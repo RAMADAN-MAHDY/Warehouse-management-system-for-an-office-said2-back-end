@@ -4,6 +4,7 @@ const exportExcel = require('../utils/exportExcel');
 const InvoiceFile = require('../models/InvoiceFile');
 const StockMovement = require('../models/StockMovement');
 const Representative = require('../models/Representative');
+const AuditLog = require('../models/AuditLog');
 const { computePaymentStatus } = require('../utils/paymentStatus');
 const mongoose = require('mongoose');
 const { checkAndNotifyLowStock } = require('./notificationController');
@@ -74,6 +75,7 @@ exports.addSaleInvoice = async (req, res) => {
         }
 
         let clientIdToSave;
+        let resolvedClientName = req.body.clientName;
         if (clientId) {
             if (!mongoose.Types.ObjectId.isValid(clientId)) {
                 await session.abortTransaction();
@@ -85,7 +87,7 @@ exports.addSaleInvoice = async (req, res) => {
                 return res.status(400).json({ status: false, message: 'العميل المختار غير موجود', data: null });
             }
             clientIdToSave = clientExists._id;
-            resolvedSellerName = clientExists.name;
+            resolvedClientName = clientExists.name;
         }
 
         const item = await Item.findOne({ modelNumber, customerId: req.customerId }).session(session);
@@ -121,6 +123,7 @@ exports.addSaleInvoice = async (req, res) => {
                     paidAmount,
                     paymentStatus,
                     sellerName: resolvedSellerName,
+                    clientName: resolvedClientName,
                     clientId: clientIdToSave,
                     representativeId: repIdToSave,
                     costPrice: unitCost
@@ -231,6 +234,7 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             paidAmount,
             paymentStatus,
             sellerName: resolvedSellerName,
+            clientName: resolvedClientName,
             clientId: clientIdToSave,
             representativeId: repIdToSave,
             costPrice: unitCost
@@ -250,6 +254,19 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
 
         checkAndNotifyLowStock(item, req.customerId);
         return res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: created });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.getSaleInvoiceAuditLogs = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const logs = await AuditLog.find({ customerId: req.customerId, referenceType: 'SALE_INVOICE', referenceId: id })
+            .sort({ at: -1 })
+            .lean();
+
+        return res.status(200).json({ status: true, message: 'سجل تدقيق الفاتورة', data: logs });
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message, data: null });
     }
@@ -327,7 +344,7 @@ exports.updateSaleInvoice = async (req, res) => {
     const runWithTransaction = async () => {
         session.startTransaction();
         const { id } = req.params;
-        const { quantity, price, sellerName, representativeId, paidAmount: reqPaidAmount } = req.body;
+        const { quantity, price, sellerName, clientName, clientId, representativeId, paidAmount: reqPaidAmount } = req.body;
 
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId }).session(session);
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
@@ -355,6 +372,29 @@ exports.updateSaleInvoice = async (req, res) => {
             resolvedSellerName = sellerName;
         }
 
+        let clientIdToSave = sale.clientId;
+        let resolvedClientName = sale.clientName;
+        if (clientId !== undefined) {
+            if (clientId) {
+                if (!mongoose.Types.ObjectId.isValid(clientId)) {
+                    await session.abortTransaction();
+                    return res.status(400).json({ status: false, message: 'Invalid clientId' });
+                }
+                const client = await mongoose.model('Client').findOne({ _id: clientId, customerId: req.customerId }).session(session);
+                if (!client) {
+                    await session.abortTransaction();
+                    return res.status(400).json({ status: false, message: 'العميل المختار غير موجود' });
+                }
+                clientIdToSave = client._id;
+                resolvedClientName = client.name;
+            } else {
+                clientIdToSave = undefined;
+                resolvedClientName = clientName !== undefined ? clientName : sale.clientName;
+            }
+        } else if (!sale.clientId && clientName !== undefined) {
+            resolvedClientName = clientName;
+        }
+
         const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId }).session(session);
         if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود' });
 
@@ -378,6 +418,8 @@ exports.updateSaleInvoice = async (req, res) => {
         }
         const paymentStatus = computePaymentStatus(total, paidAmount);
 
+        const before = sale.toObject();
+
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = total;
@@ -385,8 +427,28 @@ exports.updateSaleInvoice = async (req, res) => {
         sale.paidAmount = paidAmount;
         sale.paymentStatus = paymentStatus;
         sale.sellerName = resolvedSellerName;
+        sale.clientName = resolvedClientName;
+        sale.clientId = clientIdToSave;
         sale.representativeId = repIdToSave;
         await sale.save({ session });
+
+        await AuditLog.create([
+            {
+                customerId: req.customerId,
+                userId: req.user?._id,
+                performedBy: req.user?.username || req.user?.email || 'unknown',
+                action: 'update_sale_invoice',
+                referenceType: 'SALE_INVOICE',
+                referenceId: sale._id,
+                details: {
+                    reason: req.body.reason || null
+                },
+                changes: {
+                    before,
+                    after: sale.toObject()
+                }
+            }
+        ], { session });
 
         if (delta !== 0) {
             await StockMovement.create(
@@ -435,7 +497,7 @@ exports.updateSaleInvoice = async (req, res) => {
 exports.updateSaleInvoiceNoTx = async (req, res) => {
     try {
         const { id } = req.params;
-        const { quantity, price, sellerName, representativeId, paidAmount: reqPaidAmount } = req.body;
+        const { quantity, price, sellerName, clientName, clientId, representativeId, paidAmount: reqPaidAmount } = req.body;
 
         const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId });
         if (!sale) return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة' });
@@ -461,6 +523,27 @@ exports.updateSaleInvoiceNoTx = async (req, res) => {
             resolvedSellerName = sellerName;
         }
 
+        let clientIdToSave = sale.clientId;
+        let resolvedClientName = sale.clientName;
+        if (clientId !== undefined) {
+            if (clientId) {
+                if (!mongoose.Types.ObjectId.isValid(clientId)) {
+                    return res.status(400).json({ status: false, message: 'Invalid clientId' });
+                }
+                const client = await mongoose.model('Client').findOne({ _id: clientId, customerId: req.customerId });
+                if (!client) {
+                    return res.status(400).json({ status: false, message: 'العميل المختار غير موجود' });
+                }
+                clientIdToSave = client._id;
+                resolvedClientName = client.name;
+            } else {
+                clientIdToSave = undefined;
+                resolvedClientName = clientName !== undefined ? clientName : sale.clientName;
+            }
+        } else if (!sale.clientId && clientName !== undefined) {
+            resolvedClientName = clientName;
+        }
+
         const item = await Item.findOne({ modelNumber: sale.modelNumber, customerId: req.customerId });
         if (!item) return res.status(404).json({ status: false, message: 'المنتج غير موجود' });
 
@@ -482,6 +565,8 @@ exports.updateSaleInvoiceNoTx = async (req, res) => {
         }
         const paymentStatus = computePaymentStatus(total, paidAmount);
 
+        const before = sale.toObject();
+
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = total;
@@ -489,8 +574,26 @@ exports.updateSaleInvoiceNoTx = async (req, res) => {
         sale.paidAmount = paidAmount;
         sale.paymentStatus = paymentStatus;
         sale.sellerName = resolvedSellerName;
+        sale.clientName = resolvedClientName;
+        sale.clientId = clientIdToSave;
         sale.representativeId = repIdToSave;
         await sale.save();
+
+        await AuditLog.create({
+            customerId: req.customerId,
+            userId: req.user?._id,
+            performedBy: req.user?.username || req.user?.email || 'unknown',
+            action: 'update_sale_invoice',
+            referenceType: 'SALE_INVOICE',
+            referenceId: sale._id,
+            details: {
+                reason: req.body.reason || null
+            },
+            changes: {
+                before,
+                after: sale.toObject()
+            }
+        });
 
         if (delta !== 0) {
             await StockMovement.create({
