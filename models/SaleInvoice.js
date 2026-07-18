@@ -11,6 +11,7 @@ const saleInvoiceSchema = new mongoose.Schema({
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, required: true, min: 0, default: 0 }, // إضافة سعر التكلفة
+    totalCost: { type: Number, required: true, min: 0, default: 0 }, // إجمالي تكلفة الفاتورة (COGS) الثابت عند الإنشاء
     total: { type: Number, required: true },
     paidAmount: { type: Number, default: 0, min: 0 },
     paymentStatus: {

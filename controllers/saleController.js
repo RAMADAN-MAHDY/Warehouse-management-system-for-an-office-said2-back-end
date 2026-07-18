@@ -117,6 +117,7 @@ exports.addSaleInvoice = async (req, res) => {
                     quantity,
                     price,
                     total,
+                    totalCost: quantity * unitCost,
                     paidAmount,
                     paymentStatus,
                     sellerName: resolvedSellerName,
@@ -226,6 +227,7 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             quantity,
             price,
             total,
+            totalCost: quantity * unitCost,
             paidAmount,
             paymentStatus,
             sellerName: resolvedSellerName,
@@ -379,6 +381,7 @@ exports.updateSaleInvoice = async (req, res) => {
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = total;
+        sale.totalCost = newQty * Number(sale.costPrice || 0);
         sale.paidAmount = paidAmount;
         sale.paymentStatus = paymentStatus;
         sale.sellerName = resolvedSellerName;
@@ -482,6 +485,7 @@ exports.updateSaleInvoiceNoTx = async (req, res) => {
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = total;
+        sale.totalCost = newQty * Number(sale.costPrice || 0);
         sale.paidAmount = paidAmount;
         sale.paymentStatus = paymentStatus;
         sale.sellerName = resolvedSellerName;

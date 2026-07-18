@@ -37,7 +37,7 @@ exports.getSummary = async (req, res) => {
             ]),
             SaleInvoice.aggregate([
                 { $match: { customerId: cid } },
-                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+                    { $group: { _id: null, total: { $sum: { $ifNull: ["$totalCost", { $multiply: ["$quantity", "$costPrice"] }] } } } }
             ]),
             Return.aggregate([
                 { $match: { customerId: cid } },
@@ -45,7 +45,7 @@ exports.getSummary = async (req, res) => {
             ]),
             Return.aggregate([
                 { $match: { customerId: cid } },
-                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+                { $group: { _id: null, total: { $sum: { $ifNull: ["$totalCost", { $multiply: ["$quantity", "$costPrice"] }] } } } }
             ]),
             Expense.find({ customerId: cid }).lean(),
             SaleInvoice.find({ customerId: cid }).sort({ createdAt: -1 }).limit(5).lean(),
@@ -164,7 +164,7 @@ exports.getProfitSummaryJson = async (req, res) => {
 
         const cogsAgg = await SaleInvoice.aggregate([
             { $match: { customerId: cid } },
-            { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+                { $group: { _id: null, total: { $sum: { $ifNull: ["$totalCost", { $multiply: ["$quantity", "$costPrice"] }] } } } }
         ]);
 
         const returnsAgg = await Return.aggregate([
@@ -174,7 +174,7 @@ exports.getProfitSummaryJson = async (req, res) => {
 
         const returnsCOGSAgg = await Return.aggregate([
             { $match: { customerId: cid } },
-            { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+                { $group: { _id: null, total: { $sum: { $ifNull: ["$totalCost", { $multiply: ["$quantity", "$costPrice"] }] } } } }
         ]);
 
         const expenses = await Expense.find({ customerId: cid }).sort({ date: -1 }).lean();
@@ -403,7 +403,7 @@ exports.getProfitReport = async (req, res) => {
             ]),
             SaleInvoice.aggregate([
                 { $match: salesFilter },
-                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+                    { $group: { _id: null, total: { $sum: { $ifNull: ["$totalCost", { $multiply: ["$quantity", "$costPrice"] }] } } } }
             ]),
             Return.aggregate([
                 { $match: returnFilter },
@@ -411,7 +411,7 @@ exports.getProfitReport = async (req, res) => {
             ]),
             Return.aggregate([
                 { $match: returnFilter },
-                { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$costPrice"] } } } }
+                    { $group: { _id: null, total: { $sum: { $ifNull: ["$totalCost", { $multiply: ["$quantity", "$costPrice"] }] } } } }
             ]),
             Expense.aggregate([
                 { $match: expenseFilter },
