@@ -2,6 +2,7 @@ const Return = require('../models/Return');
 const SaleInvoice = require('../models/SaleInvoice');
 const Item = require('../models/Item');
 const StockMovement = require('../models/StockMovement');
+const AuditLog = require('../models/AuditLog');
 const mongoose = require('mongoose');
 
 /**
@@ -74,7 +75,30 @@ exports.addReturn = async (req, res) => {
             }
         ], { session });
 
-        // 7. Update original sale invoice quantity (optional - depends on if we want to reflect it there)
+        // 7. Record audit log on the original sale invoice
+        await AuditLog.create([
+            {
+                customerId: req.customerId,
+                userId: req.user?._id,
+                performedBy: req.user?.username || req.user?.email || 'unknown',
+                action: 'return_sale_invoice',
+                referenceType: 'SALE_INVOICE',
+                referenceId: sale._id,
+                details: {
+                    returnId: returnRecord[0]._id,
+                    quantity: Number(quantity),
+                    refundAmount,
+                    reason: reason || null,
+                    item: {
+                        itemId: item._id,
+                        modelNumber: sale.modelNumber,
+                        name: sale.name
+                    }
+                }
+            }
+        ], { session });
+
+        // 8. Update original sale invoice quantity (optional - depends on if we want to reflect it there)
         // For now, we keep the original sale as is, but the return is a separate record.
         // If we wanted to reduce the sale quantity:
         // sale.quantity -= quantity;
