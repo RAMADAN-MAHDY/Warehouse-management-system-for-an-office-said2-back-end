@@ -4,6 +4,7 @@ const exportExcel = require('../utils/exportExcel');
 const InvoiceFile = require('../models/InvoiceFile');
 const StockMovement = require('../models/StockMovement');
 const Representative = require('../models/Representative');
+const Client = require('../models/Client');
 const AuditLog = require('../models/AuditLog');
 const { computePaymentStatus } = require('../utils/paymentStatus');
 const mongoose = require('mongoose');
@@ -262,7 +263,14 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
 exports.getSaleInvoiceAuditLogs = async (req, res) => {
     try {
         const { id } = req.params;
-        const logs = await AuditLog.find({ customerId: req.customerId, referenceType: 'SALE_INVOICE', referenceId: id })
+        const { action } = req.query;
+        const filter = {
+            customerId: req.customerId,
+            referenceType: 'SALE_INVOICE',
+            referenceId: id,
+            ...(action ? { action } : {})
+        };
+        const logs = await AuditLog.find(filter)
             .sort({ at: -1 })
             .lean();
 
@@ -764,5 +772,150 @@ exports.getSalesByRepresentative = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.addSaleInvoicePayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    const runWithTransaction = async () => {
+        session.startTransaction();
+        const { id } = req.params;
+        const { amount, method, referenceNumber, note } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'الفاتورة غير موجودة', data: null });
+        }
+
+        const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId }).session(session);
+        if (!sale) {
+            await session.abortTransaction();
+            return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة', data: null });
+        }
+
+        const remaining = Number(sale.total) - Number(sale.paidAmount || 0);
+        if (Number(amount) <= 0) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'المبلغ يجب أن يكون أكبر من صفر', data: null });
+        }
+        if (Number(amount) > remaining) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'المبلغ المدفوع أكبر من المتبقي', data: null });
+        }
+
+        const before = sale.toObject();
+        const newPaidAmount = Number(sale.paidAmount || 0) + Number(amount);
+        sale.paidAmount = newPaidAmount;
+        sale.paymentStatus = computePaymentStatus(sale.total, newPaidAmount);
+        await sale.save({ session });
+
+        if (sale.clientId) {
+            await Client.updateOne(
+                { _id: sale.clientId, customerId: req.customerId },
+                { $inc: { balance: -Number(amount) } },
+                { session }
+            );
+        }
+
+        await AuditLog.create(
+            [
+                {
+                    customerId: req.customerId,
+                    userId: req.user?._id,
+                    performedBy: req.user?.username || req.user?.email || 'unknown',
+                    action: 'sale_invoice_payment',
+                    referenceType: 'SALE_INVOICE',
+                    referenceId: sale._id,
+                    details: {
+                        amount: Number(amount),
+                        method: method || 'cash',
+                        referenceNumber: referenceNumber || null,
+                        note: note || null
+                    },
+                    changes: { before, after: sale.toObject() }
+                }
+            ],
+            { session }
+        );
+
+        await session.commitTransaction();
+        return res.json({ status: true, message: 'تم تسجيل الدفعة', data: sale });
+    };
+
+    try {
+        return await runWithTransaction();
+    } catch (error) {
+        const msg = String(error?.message || '');
+        if (msg.includes('Transaction numbers are only allowed') || msg.includes('replica set')) {
+            try {
+                session.endSession();
+            } catch (_) {}
+            return await exports.addSaleInvoicePaymentNoTx(req, res);
+        }
+        try {
+            await session.abortTransaction();
+        } catch (_) {}
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    } finally {
+        try {
+            session.endSession();
+        } catch (_) {}
+    }
+};
+
+exports.addSaleInvoicePaymentNoTx = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { amount, method, referenceNumber, note } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ status: false, message: 'الفاتورة غير موجودة', data: null });
+        }
+
+        const sale = await SaleInvoice.findOne({ _id: id, customerId: req.customerId });
+        if (!sale) {
+            return res.status(404).json({ status: false, message: 'الفاتورة غير موجودة', data: null });
+        }
+
+        const remaining = Number(sale.total) - Number(sale.paidAmount || 0);
+        if (Number(amount) <= 0) {
+            return res.status(400).json({ status: false, message: 'المبلغ يجب أن يكون أكبر من صفر', data: null });
+        }
+        if (Number(amount) > remaining) {
+            return res.status(400).json({ status: false, message: 'المبلغ المدفوع أكبر من المتبقي', data: null });
+        }
+
+        const before = sale.toObject();
+        const newPaidAmount = Number(sale.paidAmount || 0) + Number(amount);
+        sale.paidAmount = newPaidAmount;
+        sale.paymentStatus = computePaymentStatus(sale.total, newPaidAmount);
+        await sale.save();
+
+        if (sale.clientId) {
+            await Client.updateOne(
+                { _id: sale.clientId, customerId: req.customerId },
+                { $inc: { balance: -Number(amount) } }
+            );
+        }
+
+        await AuditLog.create({
+            customerId: req.customerId,
+            userId: req.user?._id,
+            performedBy: req.user?.username || req.user?.email || 'unknown',
+            action: 'sale_invoice_payment',
+            referenceType: 'SALE_INVOICE',
+            referenceId: sale._id,
+            details: {
+                amount: Number(amount),
+                method: method || 'cash',
+                referenceNumber: referenceNumber || null,
+                note: note || null
+            },
+            changes: { before, after: sale.toObject() }
+        });
+
+        return res.json({ status: true, message: 'تم تسجيل الدفعة', data: sale });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
     }
 };

@@ -31,6 +31,7 @@ const clientSchema = new mongoose.Schema(
         phone: { type: String, trim: true, maxlength: 50 },
         email: { type: String, trim: true, lowercase: true, maxlength: 200 },
         address: { type: String, trim: true, maxlength: 500 },
+        balance: { type: Number, default: 0 },
         isActive: { type: Boolean, default: true, index: true },
         deletedAt: { type: Date },
     },

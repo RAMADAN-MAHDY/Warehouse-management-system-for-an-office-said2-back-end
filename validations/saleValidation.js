@@ -53,8 +53,19 @@ const updateSaleSchema = Joi.object({
     reason: Joi.string().trim().max(500).allow('', null).optional()
 });
 
+const addSaleInvoicePaymentSchema = Joi.object({
+    amount: Joi.number().greater(0).max(100000000).required().messages({
+        'number.base': 'المبلغ يجب أن يكون رقمًا',
+        'number.greater': 'المبلغ يجب أن يكون أكبر من صفر'
+    }),
+    method: Joi.string().valid('cash', 'bank_transfer', 'cheque', 'other').optional(),
+    referenceNumber: Joi.string().trim().max(100).allow('', null).optional(),
+    note: Joi.string().trim().max(500).allow('', null).optional()
+});
+
 module.exports = {
     saleSchema,
     updateSaleSchema,
-    bulkDeleteSchema
+    bulkDeleteSchema,
+    addSaleInvoicePaymentSchema
 };
