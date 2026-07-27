@@ -5,6 +5,7 @@ const Item = require('../models/Item');
 const StockMovement = require('../models/StockMovement');
 const InvoiceFile = require('../models/InvoiceFile');
 const exportExcel = require('../utils/exportExcel');
+const PurchaseInvoicePayment = require('../models/PurchaseInvoicePayment');
 const { computePaymentStatus } = require('../utils/paymentStatus');
 
 const formatInvoiceNumber = () => {
@@ -140,6 +141,25 @@ exports.createPurchaseInvoice = async (req, res) => {
             );
         }
 
+        if (finalPaidAmount > 0) {
+            await PurchaseInvoicePayment.create(
+                [
+                    {
+                        customerId: req.customerId,
+                        invoiceId: createdInvoice._id,
+                        supplierId,
+                        amount: finalPaidAmount,
+                        method: 'other',
+                        note: 'دفعة أولى عند إنشاء الفاتورة',
+                        date: createdInvoice.date,
+                        createdBy: req.user._id,
+                        status: 'active'
+                    }
+                ],
+                { session }
+            );
+        }
+
         await session.commitTransaction();
         return res.status(201).json({ status: true, message: 'Purchase invoice created', data: createdInvoice });
     };
@@ -248,6 +268,20 @@ exports.createPurchaseInvoiceNoTx = async (req, res) => {
                 { _id: supplierId, customerId: req.customerId },
                 { $inc: { balance: remainingDebt } }
             );
+        }
+
+        if (finalPaidAmount > 0) {
+            await PurchaseInvoicePayment.create({
+                customerId: req.customerId,
+                invoiceId: createdInvoice._id,
+                supplierId,
+                amount: finalPaidAmount,
+                method: 'other',
+                note: 'دفعة أولى عند إنشاء الفاتورة',
+                date: createdInvoice.date,
+                createdBy: req.user._id,
+                status: 'active'
+            });
         }
 
         return res.status(201).json({ status: true, message: 'Purchase invoice created', data: createdInvoice });
@@ -425,7 +459,7 @@ exports.updatePurchaseInvoice = async (req, res) => {
     const runWithTransaction = async () => {
         session.startTransaction();
         const { id } = req.params;
-        const { supplierId, date, items, tax, discount, paidAmount } = req.body;
+        const { supplierId, date, items, tax, discount } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             await session.abortTransaction();
@@ -489,15 +523,10 @@ exports.updatePurchaseInvoice = async (req, res) => {
             }
         }
 
-        const finalPaidAmount = paidAmount !== undefined ? Number(paidAmount) : invoice.paidAmount;
-        if (finalPaidAmount > finalGrandTotal) {
-            await session.abortTransaction();
-            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed grand total', data: null });
-        }
-        const paymentStatus = computePaymentStatus(finalGrandTotal, finalPaidAmount);
+        const paymentStatus = computePaymentStatus(finalGrandTotal, invoice.paidAmount);
 
         const oldRemainingDebt = Number(invoice.grandTotal) - Number(invoice.paidAmount);
-        const newRemainingDebt = finalGrandTotal - finalPaidAmount;
+        const newRemainingDebt = finalGrandTotal - Number(invoice.paidAmount);
         const debtDelta = newRemainingDebt - oldRemainingDebt;
         if (debtDelta !== 0) {
             await Supplier.updateOne(
@@ -519,7 +548,6 @@ exports.updatePurchaseInvoice = async (req, res) => {
         invoice.tax = finalTax;
         invoice.discount = finalDiscount;
         invoice.grandTotal = finalGrandTotal;
-        invoice.paidAmount = finalPaidAmount;
         invoice.paymentStatus = paymentStatus;
         await invoice.save({ session });
 
@@ -551,7 +579,7 @@ exports.updatePurchaseInvoice = async (req, res) => {
 exports.updatePurchaseInvoiceNoTx = async (req, res) => {
     try {
         const { id } = req.params;
-        const { supplierId, date, items, tax, discount, paidAmount } = req.body;
+        const { supplierId, date, items, tax, discount } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({ status: false, message: 'Invalid id', data: null });
@@ -608,14 +636,10 @@ exports.updatePurchaseInvoiceNoTx = async (req, res) => {
             }
         }
 
-        const finalPaidAmount = paidAmount !== undefined ? Number(paidAmount) : invoice.paidAmount;
-        if (finalPaidAmount > finalGrandTotal) {
-            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed grand total', data: null });
-        }
-        const paymentStatus = computePaymentStatus(finalGrandTotal, finalPaidAmount);
+        const paymentStatus = computePaymentStatus(finalGrandTotal, invoice.paidAmount);
 
         const oldRemainingDebt = Number(invoice.grandTotal) - Number(invoice.paidAmount);
-        const newRemainingDebt = finalGrandTotal - finalPaidAmount;
+        const newRemainingDebt = finalGrandTotal - Number(invoice.paidAmount);
         const debtDelta = newRemainingDebt - oldRemainingDebt;
         if (debtDelta !== 0) {
             await Supplier.updateOne(
@@ -636,7 +660,6 @@ exports.updatePurchaseInvoiceNoTx = async (req, res) => {
         invoice.tax = finalTax;
         invoice.discount = finalDiscount;
         invoice.grandTotal = finalGrandTotal;
-        invoice.paidAmount = finalPaidAmount;
         invoice.paymentStatus = paymentStatus;
         await invoice.save();
 

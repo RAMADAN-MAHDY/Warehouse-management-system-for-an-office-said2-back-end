@@ -27,7 +27,6 @@ const purchaseInvoiceUpdateSchema = Joi.object({
     date: Joi.date().optional(),
     tax: Joi.number().min(0).max(100000000).optional(),
     discount: Joi.number().min(0).max(100000000).optional(),
-    paidAmount: Joi.number().min(0).max(100000000).optional(),
     items: Joi.array()
         .min(1)
         .items(
