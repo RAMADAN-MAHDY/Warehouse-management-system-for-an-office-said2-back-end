@@ -4,8 +4,8 @@ const SaleInvoice = require('../models/SaleInvoice');
 const Return = require('../models/Return');
 const Expense = require('../models/Expense');
 const StockMovement = require('../models/StockMovement');
-
 const PurchaseInvoice = require('../models/PurchaseInvoice');
+const Client = require('../models/Client');
 
 /**
  * ملخص شامل للعميل الحالي
@@ -24,7 +24,10 @@ exports.getSummary = async (req, res) => {
             totalReturnsCOGSAgg,
             expensesList,
             recentSales,
-            lowStockItems
+            lowStockItems,
+            unpaidInvoicesCount,
+            partiallyPaidCount,
+            topDebtorClient
         ] = await Promise.all([
             Item.countDocuments({ customerId: cid }),
             PurchaseInvoice.aggregate([
@@ -49,7 +52,10 @@ exports.getSummary = async (req, res) => {
             ]),
             Expense.find({ customerId: cid }).lean(),
             SaleInvoice.find({ customerId: cid }).sort({ createdAt: -1 }).limit(5).lean(),
-            Item.find({ customerId: cid, quantity: { $lt: 5 } }).limit(10).lean()
+            Item.find({ customerId: cid, quantity: { $lt: 5 } }).limit(10).lean(),
+            SaleInvoice.countDocuments({ customerId: cid, paymentStatus: 'unpaid' }),
+            SaleInvoice.countDocuments({ customerId: cid, paymentStatus: 'partial' }),
+            Client.findOne({ customerId: cid, balance: { $gt: 0 } }).sort({ balance: -1 }).lean()
         ]);
 
         const totalExpenses = expensesList.reduce((sum, e) => sum + e.amount, 0);
@@ -82,8 +88,17 @@ exports.getSummary = async (req, res) => {
                     totalPurchases: totalPurchaseInvoices,
                     purchasesCount: totalPurchaseInvoicesAgg[0]?.count || 0,
                     totalExpenses,
-                    netProfit
+                    netProfit,
+                    unpaidInvoicesCount,
+                    partiallyPaidCount
                 },
+                topDebtorClient: topDebtorClient ? {
+                    _id: topDebtorClient._id,
+                    name: topDebtorClient.name,
+                    code: topDebtorClient.code,
+                    phone: topDebtorClient.phone,
+                    balance: topDebtorClient.balance
+                } : null,
                 recentSales
             }
         });
