@@ -10,6 +10,18 @@ const { computePaymentStatus } = require('../utils/paymentStatus');
 const mongoose = require('mongoose');
 const { checkAndNotifyLowStock } = require('./notificationController');
 
+const formatGroupId = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    const rand = Math.random().toString(16).slice(2, 6).toUpperCase();
+    return `SG-${yyyy}${mm}${dd}-${hh}${mi}${ss}-${rand}`;
+};
+
 exports.exportSalesToExcel = async (req, res) => {
     try {
         const { from, to } = req.query;
@@ -915,6 +927,572 @@ exports.addSaleInvoicePaymentNoTx = async (req, res) => {
         });
 
         return res.json({ status: true, message: 'تم تسجيل الدفعة', data: sale });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.addSaleInvoiceGroup = async (req, res) => {
+    const session = await mongoose.startSession();
+    const runWithTransaction = async () => {
+        session.startTransaction();
+        const { items, sellerName, representativeId, clientName, clientId, paidAmount: reqPaidAmount } = req.body;
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'يجب تقديم قائمة صالحة من المنتجات', data: null });
+        }
+
+        let repIdToSave;
+        let resolvedSellerName = sellerName;
+        if (representativeId) {
+            if (!mongoose.Types.ObjectId.isValid(representativeId)) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'Invalid representativeId', data: null });
+            }
+            const rep = await Representative.findOne({ _id: representativeId, customerId: req.customerId, isActive: true }).session(session);
+            if (!rep) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'المندوب غير موجود أو غير نشط', data: null });
+            }
+            repIdToSave = rep._id;
+            resolvedSellerName = rep.name;
+        }
+
+        let clientIdToSave;
+        let resolvedClientName = clientName;
+        if (clientId) {
+            if (!mongoose.Types.ObjectId.isValid(clientId)) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'Invalid clientId', data: null });
+            }
+            const clientExists = await mongoose.model('Client').findOne({ _id: clientId, customerId: req.customerId }).session(session);
+            if (!clientExists) {
+                await session.abortTransaction();
+                return res.status(400).json({ status: false, message: 'العميل المختار غير موجود', data: null });
+            }
+            clientIdToSave = clientExists._id;
+            resolvedClientName = clientExists.name;
+        }
+
+        const requestedTotals = {};
+        for (const line of items) {
+            const m = line.modelNumber;
+            requestedTotals[m] = (requestedTotals[m] || 0) + Number(line.quantity);
+        }
+
+        const itemDocs = {};
+        for (const modelNum of Object.keys(requestedTotals)) {
+            const item = await Item.findOne({ modelNumber: modelNum, customerId: req.customerId }).session(session);
+            if (!item) {
+                await session.abortTransaction();
+                return res.status(404).json({ status: false, message: `المنتج (${modelNum}) غير موجود`, data: null });
+            }
+            if (item.quantity < requestedTotals[modelNum]) {
+                await session.abortTransaction();
+                return res.status(400).json({
+                    status: false,
+                    message: `الكمية المتاحة من المنتج (${item.name} - ${modelNum}) غير كافية (المطلوب: ${requestedTotals[modelNum]}، المتاح: ${item.quantity})`,
+                    data: null
+                });
+            }
+            itemDocs[modelNum] = item;
+        }
+
+        const totalGroupPrice = items.reduce((sum, line) => sum + (Number(line.quantity) * Number(line.price)), 0);
+        let remainingInitialPayment = Number(reqPaidAmount || 0);
+
+        if (remainingInitialPayment > totalGroupPrice) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed total', data: null });
+        }
+
+        const groupId = formatGroupId();
+        const createdInvoices = [];
+
+        for (const line of items) {
+            const item = itemDocs[line.modelNumber];
+            const lineQty = Number(line.quantity);
+            const linePrice = Number(line.price);
+            const lineTotal = lineQty * linePrice;
+            const unitCost = item.costPrice || item.price || 0;
+
+            item.quantity -= lineQty;
+            await item.save({ session });
+
+            const linePaidAmount = Math.min(remainingInitialPayment, lineTotal);
+            remainingInitialPayment -= linePaidAmount;
+
+            const paymentStatus = computePaymentStatus(lineTotal, linePaidAmount);
+
+            const invoice = await SaleInvoice.create(
+                [
+                    {
+                        customerId: req.customerId,
+                        modelNumber: line.modelNumber,
+                        name: line.name,
+                        quantity: lineQty,
+                        price: linePrice,
+                        total: lineTotal,
+                        totalCost: lineQty * unitCost,
+                        paidAmount: linePaidAmount,
+                        paymentStatus,
+                        sellerName: resolvedSellerName,
+                        clientName: resolvedClientName,
+                        clientId: clientIdToSave,
+                        representativeId: repIdToSave,
+                        costPrice: unitCost,
+                        invoiceGroupId: groupId
+                    }
+                ],
+                { session }
+            );
+
+            const created = invoice[0];
+            createdInvoices.push(created);
+
+            await StockMovement.create(
+                [
+                    {
+                        customerId: req.customerId,
+                        itemId: item._id,
+                        qty: lineQty,
+                        direction: 'OUT',
+                        reason: 'SALE',
+                        referenceType: 'SALE_INVOICE',
+                        referenceId: created._id,
+                        unitCost: unitCost,
+                        date: created.createdAt || new Date(),
+                    }
+                ],
+                { session }
+            );
+
+            checkAndNotifyLowStock(item, req.customerId);
+        }
+
+        await session.commitTransaction();
+
+        const groupTotals = {
+            subTotal: totalGroupPrice,
+            grandTotal: totalGroupPrice,
+            paidAmount: Number(reqPaidAmount || 0),
+            remainingDebt: Math.max(0, totalGroupPrice - Number(reqPaidAmount || 0)),
+            itemCount: createdInvoices.length,
+            paymentStatus: computePaymentStatus(totalGroupPrice, Number(reqPaidAmount || 0))
+        };
+
+        return res.status(201).json({
+            status: true,
+            message: 'تم إضافة مبيعات المجموعة بنجاح',
+            invoiceGroupId: groupId,
+            totals: groupTotals,
+            data: createdInvoices
+        });
+    };
+
+    try {
+        return await runWithTransaction();
+    } catch (error) {
+        const msg = String(error?.message || '');
+        if (msg.includes('Transaction numbers are only allowed') || msg.includes('replica set')) {
+            try {
+                session.endSession();
+            } catch (_) {}
+            return await exports.addSaleInvoiceGroupNoTx(req, res);
+        }
+        try {
+            await session.abortTransaction();
+        } catch (_) {}
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    } finally {
+        try {
+            session.endSession();
+        } catch (_) {}
+    }
+};
+
+exports.addSaleInvoiceGroupNoTx = async (req, res) => {
+    try {
+        const { items, sellerName, representativeId, clientName, clientId, paidAmount: reqPaidAmount } = req.body;
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ status: false, message: 'يجب تقديم قائمة صالحة من المنتجات', data: null });
+        }
+
+        let repIdToSave;
+        let resolvedSellerName = sellerName;
+        if (representativeId) {
+            if (!mongoose.Types.ObjectId.isValid(representativeId)) {
+                return res.status(400).json({ status: false, message: 'Invalid representativeId', data: null });
+            }
+            const rep = await Representative.findOne({ _id: representativeId, customerId: req.customerId, isActive: true });
+            if (!rep) {
+                return res.status(400).json({ status: false, message: 'المندوب غير موجود أو غير نشط', data: null });
+            }
+            repIdToSave = rep._id;
+            resolvedSellerName = rep.name;
+        }
+
+        let clientIdToSave;
+        let resolvedClientName = clientName;
+        if (clientId) {
+            if (!mongoose.Types.ObjectId.isValid(clientId)) {
+                return res.status(400).json({ status: false, message: 'Invalid clientId', data: null });
+            }
+            const clientExists = await mongoose.model('Client').findOne({ _id: clientId, customerId: req.customerId });
+            if (!clientExists) {
+                return res.status(400).json({ status: false, message: 'العميل المختار غير موجود', data: null });
+            }
+            clientIdToSave = clientExists._id;
+            resolvedClientName = clientExists.name;
+        }
+
+        const requestedTotals = {};
+        for (const line of items) {
+            const m = line.modelNumber;
+            requestedTotals[m] = (requestedTotals[m] || 0) + Number(line.quantity);
+        }
+
+        const itemDocs = {};
+        for (const modelNum of Object.keys(requestedTotals)) {
+            const item = await Item.findOne({ modelNumber: modelNum, customerId: req.customerId });
+            if (!item) {
+                return res.status(404).json({ status: false, message: `المنتج (${modelNum}) غير موجود`, data: null });
+            }
+            if (item.quantity < requestedTotals[modelNum]) {
+                return res.status(400).json({
+                    status: false,
+                    message: `الكمية المتاحة من المنتج (${item.name} - ${modelNum}) غير كافية (المطلوب: ${requestedTotals[modelNum]}، المتاح: ${item.quantity})`,
+                    data: null
+                });
+            }
+            itemDocs[modelNum] = item;
+        }
+
+        const totalGroupPrice = items.reduce((sum, line) => sum + (Number(line.quantity) * Number(line.price)), 0);
+        let remainingInitialPayment = Number(reqPaidAmount || 0);
+
+        if (remainingInitialPayment > totalGroupPrice) {
+            return res.status(400).json({ status: false, message: 'Paid amount cannot exceed total', data: null });
+        }
+
+        const groupId = formatGroupId();
+        const createdInvoices = [];
+
+        for (const line of items) {
+            const item = itemDocs[line.modelNumber];
+            const lineQty = Number(line.quantity);
+            const linePrice = Number(line.price);
+            const lineTotal = lineQty * linePrice;
+            const unitCost = item.costPrice || item.price || 0;
+
+            item.quantity -= lineQty;
+            await item.save();
+
+            const linePaidAmount = Math.min(remainingInitialPayment, lineTotal);
+            remainingInitialPayment -= linePaidAmount;
+
+            const paymentStatus = computePaymentStatus(lineTotal, linePaidAmount);
+
+            const created = await SaleInvoice.create({
+                customerId: req.customerId,
+                modelNumber: line.modelNumber,
+                name: line.name,
+                quantity: lineQty,
+                price: linePrice,
+                total: lineTotal,
+                totalCost: lineQty * unitCost,
+                paidAmount: linePaidAmount,
+                paymentStatus,
+                sellerName: resolvedSellerName,
+                clientName: resolvedClientName,
+                clientId: clientIdToSave,
+                representativeId: repIdToSave,
+                costPrice: unitCost,
+                invoiceGroupId: groupId
+            });
+
+            createdInvoices.push(created);
+
+            await StockMovement.create({
+                customerId: req.customerId,
+                itemId: item._id,
+                qty: lineQty,
+                direction: 'OUT',
+                reason: 'SALE',
+                referenceType: 'SALE_INVOICE',
+                referenceId: created._id,
+                unitCost: unitCost,
+                date: created.createdAt || new Date(),
+            });
+
+            checkAndNotifyLowStock(item, req.customerId);
+        }
+
+        const groupTotals = {
+            subTotal: totalGroupPrice,
+            grandTotal: totalGroupPrice,
+            paidAmount: Number(reqPaidAmount || 0),
+            remainingDebt: Math.max(0, totalGroupPrice - Number(reqPaidAmount || 0)),
+            itemCount: createdInvoices.length,
+            paymentStatus: computePaymentStatus(totalGroupPrice, Number(reqPaidAmount || 0))
+        };
+
+        return res.status(201).json({
+            status: true,
+            message: 'تم إضافة مبيعات المجموعة بنجاح',
+            invoiceGroupId: groupId,
+            totals: groupTotals,
+            data: createdInvoices
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.addGroupPayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    const runWithTransaction = async () => {
+        session.startTransaction();
+        const { groupId } = req.params;
+        const { amount, method, referenceNumber, note } = req.body;
+
+        const sales = await SaleInvoice.find({ invoiceGroupId: groupId, customerId: req.customerId })
+            .sort({ createdAt: 1 })
+            .session(session);
+
+        if (!sales || sales.length === 0) {
+            await session.abortTransaction();
+            return res.status(404).json({ status: false, message: 'مجموعة الفواتير غير موجودة', data: null });
+        }
+
+        const totalRemaining = sales.reduce((sum, s) => sum + (Number(s.total) - Number(s.paidAmount || 0)), 0);
+
+        if (Number(amount) <= 0) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'المبلغ يجب أن يكون أكبر من صفر', data: null });
+        }
+        if (Number(amount) > totalRemaining) {
+            await session.abortTransaction();
+            return res.status(400).json({ status: false, message: 'المبلغ المدفوع أكبر من المتبقي', data: null });
+        }
+
+        let paymentToDistribute = Number(amount);
+        const updatedSales = [];
+
+        for (const s of sales) {
+            if (paymentToDistribute <= 0) break;
+            const sRemaining = Number(s.total) - Number(s.paidAmount || 0);
+            if (sRemaining <= 0) continue;
+
+            const currentPay = Math.min(paymentToDistribute, sRemaining);
+            paymentToDistribute -= currentPay;
+
+            const before = s.toObject();
+            const newPaidAmount = Number(s.paidAmount || 0) + currentPay;
+            s.paidAmount = newPaidAmount;
+            s.paymentStatus = computePaymentStatus(s.total, newPaidAmount);
+            await s.save({ session });
+            updatedSales.push(s);
+
+            await AuditLog.create(
+                [
+                    {
+                        customerId: req.customerId,
+                        userId: req.user?._id,
+                        performedBy: req.user?.username || req.user?.email || 'unknown',
+                        action: 'sale_invoice_payment',
+                        referenceType: 'SALE_INVOICE',
+                        referenceId: s._id,
+                        details: {
+                            amount: currentPay,
+                            groupTotalPayment: Number(amount),
+                            invoiceGroupId: groupId,
+                            method: method || 'cash',
+                            referenceNumber: referenceNumber || null,
+                            note: note || null
+                        },
+                        changes: { before, after: s.toObject() }
+                    }
+                ],
+                { session }
+            );
+        }
+
+        const targetClientId = sales.find(s => s.clientId)?.clientId;
+        if (targetClientId) {
+            await Client.updateOne(
+                { _id: targetClientId, customerId: req.customerId },
+                { $inc: { balance: -Number(amount) } },
+                { session }
+            );
+        }
+
+        await session.commitTransaction();
+
+        const allSales = await SaleInvoice.find({ invoiceGroupId: groupId, customerId: req.customerId }).lean();
+        const totalGrand = allSales.reduce((sum, s) => sum + Number(s.total), 0);
+        const totalPaid = allSales.reduce((sum, s) => sum + Number(s.paidAmount || 0), 0);
+
+        const groupTotals = {
+            grandTotal: totalGrand,
+            paidAmount: totalPaid,
+            remainingDebt: Math.max(0, totalGrand - totalPaid),
+            itemCount: allSales.length,
+            paymentStatus: computePaymentStatus(totalGrand, totalPaid)
+        };
+
+        return res.json({
+            status: true,
+            message: 'تم تسجيل الدفعة على المجموعة بنجاح',
+            invoiceGroupId: groupId,
+            totals: groupTotals,
+            data: allSales
+        });
+    };
+
+    try {
+        return await runWithTransaction();
+    } catch (error) {
+        const msg = String(error?.message || '');
+        if (msg.includes('Transaction numbers are only allowed') || msg.includes('replica set')) {
+            try {
+                session.endSession();
+            } catch (_) {}
+            return await exports.addGroupPaymentNoTx(req, res);
+        }
+        try {
+            await session.abortTransaction();
+        } catch (_) {}
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    } finally {
+        try {
+            session.endSession();
+        } catch (_) {}
+    }
+};
+
+exports.addGroupPaymentNoTx = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const { amount, method, referenceNumber, note } = req.body;
+
+        const sales = await SaleInvoice.find({ invoiceGroupId: groupId, customerId: req.customerId })
+            .sort({ createdAt: 1 });
+
+        if (!sales || sales.length === 0) {
+            return res.status(404).json({ status: false, message: 'مجموعة الفواتير غير موجودة', data: null });
+        }
+
+        const totalRemaining = sales.reduce((sum, s) => sum + (Number(s.total) - Number(s.paidAmount || 0)), 0);
+
+        if (Number(amount) <= 0) {
+            return res.status(400).json({ status: false, message: 'المبلغ يجب أن يكون أكبر من صفر', data: null });
+        }
+        if (Number(amount) > totalRemaining) {
+            return res.status(400).json({ status: false, message: 'المبلغ المدفوع أكبر من المتبقي', data: null });
+        }
+
+        let paymentToDistribute = Number(amount);
+
+        for (const s of sales) {
+            if (paymentToDistribute <= 0) break;
+            const sRemaining = Number(s.total) - Number(s.paidAmount || 0);
+            if (sRemaining <= 0) continue;
+
+            const currentPay = Math.min(paymentToDistribute, sRemaining);
+            paymentToDistribute -= currentPay;
+
+            const before = s.toObject();
+            const newPaidAmount = Number(s.paidAmount || 0) + currentPay;
+            s.paidAmount = newPaidAmount;
+            s.paymentStatus = computePaymentStatus(s.total, newPaidAmount);
+            await s.save();
+
+            await AuditLog.create({
+                customerId: req.customerId,
+                userId: req.user?._id,
+                performedBy: req.user?.username || req.user?.email || 'unknown',
+                action: 'sale_invoice_payment',
+                referenceType: 'SALE_INVOICE',
+                referenceId: s._id,
+                details: {
+                    amount: currentPay,
+                    groupTotalPayment: Number(amount),
+                    invoiceGroupId: groupId,
+                    method: method || 'cash',
+                    referenceNumber: referenceNumber || null,
+                    note: note || null
+                },
+                changes: { before, after: s.toObject() }
+            });
+        }
+
+        const targetClientId = sales.find(s => s.clientId)?.clientId;
+        if (targetClientId) {
+            await Client.updateOne(
+                { _id: targetClientId, customerId: req.customerId },
+                { $inc: { balance: -Number(amount) } }
+            );
+        }
+
+        const allSales = await SaleInvoice.find({ invoiceGroupId: groupId, customerId: req.customerId }).lean();
+        const totalGrand = allSales.reduce((sum, s) => sum + Number(s.total), 0);
+        const totalPaid = allSales.reduce((sum, s) => sum + Number(s.paidAmount || 0), 0);
+
+        const groupTotals = {
+            grandTotal: totalGrand,
+            paidAmount: totalPaid,
+            remainingDebt: Math.max(0, totalGrand - totalPaid),
+            itemCount: allSales.length,
+            paymentStatus: computePaymentStatus(totalGrand, totalPaid)
+        };
+
+        return res.json({
+            status: true,
+            message: 'تم تسجيل الدفعة على المجموعة بنجاح',
+            invoiceGroupId: groupId,
+            totals: groupTotals,
+            data: allSales
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
+exports.getSaleInvoiceGroup = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const sales = await SaleInvoice.find({ customerId: req.customerId, invoiceGroupId: groupId })
+            .sort({ createdAt: 1 })
+            .populate('clientId')
+            .populate('representativeId')
+            .lean();
+
+        if (!sales || sales.length === 0) {
+            return res.status(404).json({ status: false, message: 'مجموعة الفواتير غير موجودة', data: null });
+        }
+
+        const totalGrand = sales.reduce((sum, s) => sum + Number(s.total), 0);
+        const totalPaid = sales.reduce((sum, s) => sum + Number(s.paidAmount || 0), 0);
+
+        const groupTotals = {
+            subTotal: totalGrand,
+            grandTotal: totalGrand,
+            paidAmount: totalPaid,
+            remainingDebt: Math.max(0, totalGrand - totalPaid),
+            itemCount: sales.length,
+            paymentStatus: computePaymentStatus(totalGrand, totalPaid)
+        };
+
+        return res.status(200).json({
+            status: true,
+            message: 'فواتير المجموعة',
+            invoiceGroupId: groupId,
+            totals: groupTotals,
+            data: sales
+        });
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message, data: null });
     }

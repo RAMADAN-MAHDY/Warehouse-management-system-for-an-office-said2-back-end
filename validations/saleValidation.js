@@ -63,9 +63,32 @@ const addSaleInvoicePaymentSchema = Joi.object({
     note: Joi.string().trim().max(500).allow('', null).optional()
 });
 
+const addSaleGroupSchema = Joi.object({
+    items: Joi.array()
+        .min(1)
+        .items(
+            Joi.object({
+                modelNumber: Joi.string().trim().max(1000).required(),
+                name: Joi.string().trim().max(200).required(),
+                quantity: Joi.number().greater(0).max(1000000).required(),
+                price: Joi.number().min(0).max(10000000).required()
+            })
+        )
+        .required(),
+    sellerName: Joi.string().trim().max(50).allow('').optional(),
+    clientName: Joi.string().trim().max(100).allow('').optional(),
+    representativeId: Joi.string().trim().allow('', null).optional(),
+    clientId: Joi.string().trim().allow('', null).optional(),
+    paidAmount: Joi.number().min(0).max(100000000).optional().default(0)
+});
+
+const addGroupPaymentSchema = addSaleInvoicePaymentSchema;
+
 module.exports = {
     saleSchema,
     updateSaleSchema,
     bulkDeleteSchema,
-    addSaleInvoicePaymentSchema
+    addSaleInvoicePaymentSchema,
+    addSaleGroupSchema,
+    addGroupPaymentSchema
 };

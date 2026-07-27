@@ -34,6 +34,11 @@ const saleInvoiceSchema = new mongoose.Schema({
         required: false,
         index: true,
     },
+    invoiceGroupId: {
+        type: String,
+        index: true,
+        default: null,
+    },
 }, { timestamps: true });
 
 saleInvoiceSchema.index({ customerId: 1, createdAt: -1 });
