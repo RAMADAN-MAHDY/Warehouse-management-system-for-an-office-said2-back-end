@@ -11,7 +11,8 @@ const {
     createClient,
     updateClient,
     deleteClient,
-    getClientBalance
+    getClientBalance,
+    getClientPayments
 } = require('../controllers/clientController');
 const { clientCreateSchema, clientUpdateSchema } = require('../validations/clientValidation');
 
@@ -20,6 +21,7 @@ router.use(checkSubscription);
 
 router.get('/', listClients);
 router.get('/:id/balance', getClientBalance);
+router.get('/:id/payments', getClientPayments);
 router.get('/:id', getClient);
 router.post('/', authorize('admin', 'editor'), validate(clientCreateSchema), createClient);
 router.put('/:id', authorize('admin', 'editor'), validate(clientUpdateSchema), updateClient);

@@ -103,3 +103,43 @@ exports.deleteSupplier = async (req, res) => {
         res.status(500).json({ status: false, message: error.message, data: null });
     }
 };
+
+/**
+ * جلب جميع الدفعات المسددة للمورد من PurchaseInvoicePayment
+ * GET /api/suppliers/:id/payments
+ */
+exports.getSupplierPayments = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const mongoose = require('mongoose');
+        const PurchaseInvoicePayment = require('../models/PurchaseInvoicePayment');
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ status: false, message: 'Invalid supplier id', data: null });
+        }
+
+        const supplier = await Supplier.findOne({ _id: id, customerId: req.customerId }).lean();
+        if (!supplier) {
+            return res.status(404).json({ status: false, message: 'المورد غير موجود', data: null });
+        }
+
+        const payments = await PurchaseInvoicePayment.find({
+            supplierId: id,
+            customerId: req.customerId,
+            status: 'active'
+        })
+            .populate('invoiceId', 'invoiceNumber grandTotal paidAmount status')
+            .populate('createdBy', 'username name')
+            .sort({ date: -1 })
+            .lean();
+
+        return res.status(200).json({
+            status: true,
+            message: 'Supplier payments',
+            data: payments
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+

@@ -212,3 +212,79 @@ exports.getClientBalance = async (req, res) => {
         return res.status(500).json({ status: false, message: error.message, data: null });
     }
 };
+
+/**
+ * جلب سجل جميع التحصيلات والدفعات الخاصة بالعميل من AuditLog
+ * GET /api/clients/:id/payments
+ */
+exports.getClientPayments = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ status: false, message: 'Invalid client id', data: null });
+        }
+
+        const client = await Client.findOne({ _id: id, customerId: req.customerId }).lean();
+        if (!client) {
+            return res.status(404).json({ status: false, message: 'العميل غير موجود', data: null });
+        }
+
+        const AuditLog = mongoose.model('AuditLog');
+        
+        // 1. جلب فواتير العميل
+        const clientInvoices = await SaleInvoice.find({ clientId: id, customerId: req.customerId })
+            .select('_id modelNumber name price quantity total paidAmount paymentStatus createdAt invoiceGroupId')
+            .lean();
+
+        if (clientInvoices.length === 0) {
+            return res.status(200).json({
+                status: true,
+                message: 'Client payments',
+                data: []
+            });
+        }
+
+        const invoiceMap = {};
+        const invoiceIds = clientInvoices.map(inv => {
+            invoiceMap[inv._id.toString()] = inv;
+            return inv._id;
+        });
+
+        // 2. البحث في AuditLog عن عمليات التحصيل
+        const logs = await AuditLog.find({
+            customerId: req.customerId,
+            referenceType: 'SALE_INVOICE',
+            referenceId: { $in: invoiceIds },
+            action: 'sale_invoice_payment'
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // 3. تركيب البيانات مع إرفاق تفاصيل الصنف/الفاتورة
+        const payments = logs.map(log => {
+            const inv = invoiceMap[log.referenceId?.toString()] || {};
+            return {
+                _id: log._id,
+                date: log.at || log.createdAt,
+                amount: log.details?.amount || 0,
+                method: log.details?.method || 'cash',
+                referenceNumber: log.details?.referenceNumber || null,
+                note: log.details?.note || null,
+                performedBy: log.performedBy || 'النظام',
+                invoiceId: log.referenceId,
+                modelNumber: inv.modelNumber || '-',
+                itemName: inv.name || '-',
+                invoiceGroupId: inv.invoiceGroupId || null
+            };
+        });
+
+        return res.status(200).json({
+            status: true,
+            message: 'Client payments',
+            data: payments
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message, data: null });
+    }
+};
+
