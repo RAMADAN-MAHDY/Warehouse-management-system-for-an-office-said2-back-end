@@ -4,6 +4,7 @@ const protect = require('../middleware/protectMiddleware');
 const tenantMiddleware = require('../middleware/tenantMiddleware');
 const {
     getSummary,
+    getDailySummary,
     getSalesReport,
     getInventoryReport,
     getProfitReport,
@@ -17,6 +18,9 @@ router.use(protect, tenantMiddleware);
 
 // GET /api/reports/summary - ملخص شامل للعميل
 router.get('/summary', validate(reportQuerySchema, 'query'), getSummary);
+
+// GET /api/reports/daily?days=7 - بيانات يومية للرسم البياني
+router.get('/daily', getDailySummary);
 
 // GET /api/reports/sales - تقرير المبيعات
 router.get('/sales', validate(reportQuerySchema, 'query'), getSalesReport);

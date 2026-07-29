@@ -109,6 +109,72 @@ exports.getSummary = async (req, res) => {
 };
 
 /**
+ * ملخص يومي للمبيعات والأرباح (للرسم البياني الزمني في الداشبورد)
+ * GET /api/reports/daily?days=7
+ */
+exports.getDailySummary = async (req, res) => {
+    try {
+        const cid = req.customerId;
+        const days = Math.min(90, Math.max(1, parseInt(req.query.days) || 7));
+
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days + 1);
+        startDate.setHours(0, 0, 0, 0);
+
+        const [salesByDay, returnsByDay] = await Promise.all([
+            SaleInvoice.aggregate([
+                { $match: { customerId: cid, createdAt: { $gte: startDate } } },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+                        sales: { $sum: '$total' },
+                        cogs: { $sum: { $ifNull: ['$totalCost', { $multiply: ['$quantity', '$costPrice'] }] } },
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ]),
+            Return.aggregate([
+                { $match: { customerId: cid, date: { $gte: startDate } } },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+                        returns: { $sum: '$total' }
+                    }
+                }
+            ])
+        ]);
+
+        // بناء map للمرتجعات لسهولة البحث
+        const returnsMap = {};
+        returnsByDay.forEach(r => { returnsMap[r._id] = r.returns; });
+
+        // بناء مصفوفة الأيام كاملة (بما فيها الأيام التي لا يوجد فيها مبيعات = صفر)
+        const result = [];
+        for (let i = 0; i < days; i++) {
+            const d = new Date(startDate);
+            d.setDate(startDate.getDate() + i);
+            const dateStr = d.toISOString().slice(0, 10);
+            const dayData = salesByDay.find(s => s._id === dateStr);
+            const netSales = (dayData?.sales || 0) - (returnsMap[dateStr] || 0);
+            const netCogs = dayData?.cogs || 0;
+            result.push({
+                date: dateStr,
+                sales: parseFloat(netSales.toFixed(2)),
+                cogs: parseFloat(netCogs.toFixed(2)),
+                profit: parseFloat((netSales - netCogs).toFixed(2)),
+                count: dayData?.count || 0
+            });
+        }
+
+        res.json({ status: true, data: result });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: false, message: error.message });
+    }
+};
+
+/**
  * تقرير حركة المخزون مع فلاتر وتصفح صفحات
  * GET /api/reports/stock-movements?itemId=&direction=&reason=&from=&to=&page=1&limit=50
  */
