@@ -107,11 +107,20 @@ const checkLimit = (resource) => {
                 currentUsage = await Expense.countDocuments({ customerId: cid });
             }
 
-            if (currentUsage >= limit) {
+            // حساب عدد العناصر المطلوبة في هذا الطلب (مثال: البيع الجماعي بـ N أصناف)
+            let requestedCount = 1;
+            if (resource === 'sales' && req.body?.items && Array.isArray(req.body.items)) {
+                requestedCount = req.body.items.length;
+            } else if (resource === 'items' && Array.isArray(req.body)) {
+                requestedCount = req.body.length;
+            }
+
+            if (currentUsage + requestedCount > limit) {
                 const resourceNameAr = resource === 'items' ? 'منتج' : resource === 'sales' ? 'عملية (بيع/شراء)' : 'مصروف';
+                const remaining = Math.max(0, limit - currentUsage);
                 return res.status(400).json({
                     status: false,
-                    message: `لقد وصلت للحد الأقصى المسموح به في خطتك (${limit} ${resourceNameAr}). يرجى ترقية الاشتراك للمتابعة.`,
+                    message: `العملية المطلوبة تتطلب ${requestedCount} ${resourceNameAr}، ولكن المتبقي في خطتك هو ${remaining} فقط (الحد الأقصى: ${limit}). يرجى ترقية الاشتراك للمتابعة.`,
                     type: 'LIMIT_REACHED'
                 });
             }
