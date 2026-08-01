@@ -164,6 +164,16 @@ exports.addSaleInvoice = async (req, res) => {
             { session }
         );
 
+        // تحديث رصيد العميل بالمبلغ المتبقي (الدين الجديد)
+        const remainingDebt = total - paidAmount;
+        if (clientIdToSave && remainingDebt > 0) {
+            await mongoose.model('Client').updateOne(
+                { _id: clientIdToSave, customerId: req.customerId },
+                { $inc: { balance: remainingDebt } },
+                { session }
+            );
+        }
+
         await session.commitTransaction();
         checkAndNotifyLowStock(item, req.customerId);
         return res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: created });
@@ -218,7 +228,7 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
                 return res.status(400).json({ status: false, message: 'العميل المختار غير موجود', data: null });
             }
             clientIdToSave = clientExists._id;
-            resolvedSellerName = clientExists.name;
+            resolvedClientName = clientExists.name;
         }
 
         const item = await Item.findOne({ modelNumber, customerId: req.customerId });
@@ -264,6 +274,15 @@ exports.addSaleInvoiceNoTx = async (req, res) => {
             unitCost: unitCost,
             date: created.createdAt || new Date(),
         });
+
+        // تحديث رصيد العميل بالمبلغ المتبقي (الدين الجديد)
+        const remainingDebtNoTx = total - paidAmount;
+        if (clientIdToSave && remainingDebtNoTx > 0) {
+            await mongoose.model('Client').updateOne(
+                { _id: clientIdToSave, customerId: req.customerId },
+                { $inc: { balance: remainingDebtNoTx } }
+            );
+        }
 
         checkAndNotifyLowStock(item, req.customerId);
         return res.status(201).json({ status: true, message: 'تم إضافة فاتورة البيع', data: created });
@@ -440,6 +459,42 @@ exports.updateSaleInvoice = async (req, res) => {
 
         const before = sale.toObject();
 
+        // ── تحديث رصيد العميل ──
+        // يجب حسابه هنا (قبل sale.save) لأننا نحتاج القيم القديمة من `before`
+        const oldRemainingDebt = Number(before.total) - Number(before.paidAmount);
+        const newRemainingDebt = total - paidAmount;
+        const oldClientId = before.clientId;
+        const newClientId = clientIdToSave;
+        const clientChanged = String(oldClientId || '') !== String(newClientId || '');
+
+        if (!clientChanged) {
+            // نفس العميل — نحسب الفرق فقط
+            const debtDelta = newRemainingDebt - oldRemainingDebt;
+            if (debtDelta !== 0 && newClientId) {
+                await mongoose.model('Client').updateOne(
+                    { _id: newClientId, customerId: req.customerId },
+                    { $inc: { balance: debtDelta } },
+                    { session }
+                );
+            }
+        } else {
+            // العميل تغيّر — نُعيد الدين للقديم ونُضيفه للجديد
+            if (oldClientId && oldRemainingDebt > 0) {
+                await mongoose.model('Client').updateOne(
+                    { _id: oldClientId, customerId: req.customerId },
+                    { $inc: { balance: -oldRemainingDebt } },
+                    { session }
+                );
+            }
+            if (newClientId && newRemainingDebt > 0) {
+                await mongoose.model('Client').updateOne(
+                    { _id: newClientId, customerId: req.customerId },
+                    { $inc: { balance: newRemainingDebt } },
+                    { session }
+                );
+            }
+        }
+
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = total;
@@ -587,6 +642,36 @@ exports.updateSaleInvoiceNoTx = async (req, res) => {
 
         const before = sale.toObject();
 
+        // ── تحديث رصيد العميل ──
+        const oldRemainingDebtNoTx = Number(before.total) - Number(before.paidAmount);
+        const newRemainingDebtNoTx = total - paidAmount;
+        const oldClientIdNoTx = before.clientId;
+        const newClientIdNoTx = clientIdToSave;
+        const clientChangedNoTx = String(oldClientIdNoTx || '') !== String(newClientIdNoTx || '');
+
+        if (!clientChangedNoTx) {
+            const debtDeltaNoTx = newRemainingDebtNoTx - oldRemainingDebtNoTx;
+            if (debtDeltaNoTx !== 0 && newClientIdNoTx) {
+                await mongoose.model('Client').updateOne(
+                    { _id: newClientIdNoTx, customerId: req.customerId },
+                    { $inc: { balance: debtDeltaNoTx } }
+                );
+            }
+        } else {
+            if (oldClientIdNoTx && oldRemainingDebtNoTx > 0) {
+                await mongoose.model('Client').updateOne(
+                    { _id: oldClientIdNoTx, customerId: req.customerId },
+                    { $inc: { balance: -oldRemainingDebtNoTx } }
+                );
+            }
+            if (newClientIdNoTx && newRemainingDebtNoTx > 0) {
+                await mongoose.model('Client').updateOne(
+                    { _id: newClientIdNoTx, customerId: req.customerId },
+                    { $inc: { balance: newRemainingDebtNoTx } }
+                );
+            }
+        }
+
         sale.quantity = newQty;
         sale.price = Number(price);
         sale.total = total;
@@ -665,6 +750,16 @@ exports.deleteSaleInvoice = async (req, res) => {
             );
         }
 
+        // تراجع رصيد العميل عند الحذف (الدين المتبقي يُعاد للحالة السابقة)
+        const remainingDebtOnDelete = Number(sale.total) - Number(sale.paidAmount);
+        if (sale.clientId && remainingDebtOnDelete > 0) {
+            await mongoose.model('Client').updateOne(
+                { _id: sale.clientId, customerId: req.customerId },
+                { $inc: { balance: -remainingDebtOnDelete } },
+                { session }
+            );
+        }
+
         await SaleInvoice.deleteOne({ _id: id, customerId: req.customerId }).session(session);
         await session.commitTransaction();
         return res.json({ status: true, message: 'تم حذف الفاتورة' });
@@ -714,6 +809,15 @@ exports.deleteSaleInvoiceNoTx = async (req, res) => {
             });
         }
 
+        // تراجع رصيد العميل عند الحذف
+        const remainingDebtOnDeleteNoTx = Number(sale.total) - Number(sale.paidAmount);
+        if (sale.clientId && remainingDebtOnDeleteNoTx > 0) {
+            await mongoose.model('Client').updateOne(
+                { _id: sale.clientId, customerId: req.customerId },
+                { $inc: { balance: -remainingDebtOnDeleteNoTx } }
+            );
+        }
+
         await SaleInvoice.deleteOne({ _id: id, customerId: req.customerId });
         return res.json({ status: true, message: 'تم حذف الفاتورة' });
     } catch (error) {
@@ -744,6 +848,15 @@ exports.bulkDeleteSaleInvoices = async (req, res) => {
                         date: new Date(),
                     });
                 }
+                // تراجع رصيد العميل عند الحذف الجماعي
+                const remainingDebtBulk = Number(sale.total) - Number(sale.paidAmount);
+                if (sale.clientId && remainingDebtBulk > 0) {
+                    await mongoose.model('Client').updateOne(
+                        { _id: sale.clientId, customerId: req.customerId },
+                        { $inc: { balance: -remainingDebtBulk } }
+                    );
+                }
+
                 await SaleInvoice.findByIdAndDelete(id);
             }
         }
@@ -1071,6 +1184,16 @@ exports.addSaleInvoiceGroup = async (req, res) => {
             checkAndNotifyLowStock(item, req.customerId);
         }
 
+        // تحديث رصيد العميل بإجمالي الدين للمجموعة (مرة واحدة فقط)
+        const groupRemainingDebt = Math.max(0, totalGroupPrice - Number(reqPaidAmount || 0));
+        if (clientIdToSave && groupRemainingDebt > 0) {
+            await mongoose.model('Client').updateOne(
+                { _id: clientIdToSave, customerId: req.customerId },
+                { $inc: { balance: groupRemainingDebt } },
+                { session }
+            );
+        }
+
         await session.commitTransaction();
 
         const groupTotals = {
@@ -1228,6 +1351,15 @@ exports.addSaleInvoiceGroupNoTx = async (req, res) => {
             });
 
             checkAndNotifyLowStock(item, req.customerId);
+        }
+
+        // تحديث رصيد العميل بإجمالي الدين للمجموعة (مرة واحدة فقط)
+        const groupRemainingDebtNoTx = Math.max(0, totalGroupPrice - Number(reqPaidAmount || 0));
+        if (clientIdToSave && groupRemainingDebtNoTx > 0) {
+            await mongoose.model('Client').updateOne(
+                { _id: clientIdToSave, customerId: req.customerId },
+                { $inc: { balance: groupRemainingDebtNoTx } }
+            );
         }
 
         const groupTotals = {
