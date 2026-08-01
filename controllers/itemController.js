@@ -216,7 +216,7 @@ exports.exportToExcel = async (req, res) => {
             'الحد الأدنى': item.minQuantity ?? 5,
             'الفئة': item.category || '',
             'السعر': item.price || 0,
-            'اسم العميل': item.customer || 'N/A',
+            'اسم المورد': item.customer || 'N/A',
             'تاريخ الإضافة': item.createdAt ? item.createdAt.toISOString().slice(0, 10) : ''
         }));
 
@@ -285,7 +285,7 @@ exports.exportLowStockToExcel = async (req, res) => {
             'الحد الأدنى': item.minQuantity ?? 5,
             'الكمية الناقصة': Math.max(0, Number(item.minQuantity ?? 5) - Number(item.quantity || 0)),
             'السعر': item.price || 0,
-            'اسم العميل': item.customer || 'N/A',
+            'اسم المورد': item.customer || 'N/A',
         }));
 
         const buffer = exportExcel(data, 'نواقص المخزون');
