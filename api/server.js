@@ -71,7 +71,8 @@ const STATIC_ALLOWED_ORIGINS = [
   'https://warehouse-management-system-for-an.vercel.app',
   'https://warehouse-management-system-for-an-office-said2-frontend.vercel.app',
   'http://localhost:3000',
-  'http://192.168.1.6:3000'
+  'http://192.168.1.6:3000',
+  'http://localhost:5100'
 ];
 
 const allowlist = new Set([
