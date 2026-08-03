@@ -34,8 +34,8 @@ const seedTestData = async () => {
                 planType: 'free',
                 status: 'active',
                 endDate,
-                limits: { maxItems: 200, maxSales: 200, maxExpenses: 200 },
-                usage: { items: 0, sales: 0, expenses: 0 }
+                limits: { maxItems: 200, maxSales: 200, maxExpenses: 200, maxAiTokensPerCycle: 50000 },
+                usage: { items: 0, sales: 0, expenses: 0, aiTokens: 0 }
             });
         }
 

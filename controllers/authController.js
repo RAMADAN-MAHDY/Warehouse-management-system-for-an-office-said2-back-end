@@ -36,7 +36,8 @@ exports.registerUser = async (req, res) => {
             limits: {
                 maxItems: 200, // منح صلاحيات احترافية مؤقتاً
                 maxSales: 200,
-                maxExpenses: 200
+                maxExpenses: 200,
+                maxAiTokensPerCycle: 50000
             }
         });
 

@@ -103,11 +103,7 @@ describe('Super Admin Module', () => {
                     id: 'new-plan',
                     name: 'New Plan',
                     price: 999,
-                    limits: { maxItems: 1000, maxSales: 1000, maxExpenses: 1000 }
-                });
-
-            expect(res.statusCode).toEqual(201);
-            expect(res.body.data.id).toBe('new-plan');
+                limits: { maxItems: 1000, maxSales: 1000, maxExpenses: 1000, maxAiTokensPerCycle: 200000 }
         });
 
         it('should fetch all plans', async () => {

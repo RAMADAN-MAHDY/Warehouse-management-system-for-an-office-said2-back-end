@@ -28,13 +28,15 @@ const subscriptionSchema = new mongoose.Schema({
     limits: {
         maxItems: { type: Number, default: 200 },
         maxSales: { type: Number, default: 200 },
-        maxExpenses: { type: Number, default: 200 }
+        maxExpenses: { type: Number, default: 200 },
+        maxAiTokensPerCycle: { type: Number, default: 50000 }
     },
     // الاستهلاك الحالي (يتم تحديثه مع كل عملية)
     usage: {
         items: { type: Number, default: 0 },
         sales: { type: Number, default: 0 },
-        expenses: { type: Number, default: 0 }
+        expenses: { type: Number, default: 0 },
+        aiTokens: { type: Number, default: 0 }
     },
     lastNotifiedAt: {
         type: Date

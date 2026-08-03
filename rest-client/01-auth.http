@@ -7,7 +7,7 @@
 ###  3. انسخ التوكن من الرد وضعه في @token
 ### ======================================================
 
-@baseUrl = http://localhost:5000
+@baseUrl = https://warehouse-management-system-for-an.vercel.app
 
 ### ✅ TEST 1: تسجيل مستخدم جديد (tenant1)
 ### الرد المتوقع: { status: true, customerId: "CUST-XXXXXXXX", token: "..." }
@@ -43,8 +43,8 @@ POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-   "username": "superadmin5",
-  "password": "123456789rR@"
+   "username": "رمضان4",
+  "password": "123456789"
 }
 
 ###
@@ -62,7 +62,7 @@ Content-Type: application/json
 ### ✅ TEST 5: جلب بيانات المستخدم الحالي (يتضمن customerId)
 ### ← ضع token هنا بعد تسجيل الدخول
 GET {{baseUrl}}/api/auth/me
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWIxOTM3NjlkNDhhMzYxZWU4MDFmNiIsImlhdCI6MTc3MTc3MjIyNywiZXhwIjoxNzcyMzc3MDI3fQ.5J8u5le7kavuOMMwNgDPBQERR4Ooa00F1I3iDq-oxWI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNmYyNTEwNGZmNjZlZDcwMzE4ZTI1MSIsImlhdCI6MTc4NTY2OTAwOCwiZXhwIjoxNzg2MjczODA4fQ.ZXLivrce66Pbfq2ZYwtgdfbwcPxk8HFb-UTIePO8XPM
 
 ###
 ### ❌ TEST 6: محاولة وصول بدون توكن (يجب أن يُرجع 401)

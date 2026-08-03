@@ -259,7 +259,7 @@ exports.approveTransaction = async (req, res) => {
                 planType: transaction.planRequested,
                 status: 'active',
                 endDate,
-                limits: dbPlan ? dbPlan.limits : { maxItems: 200, maxSales: 200, maxExpenses: 200 }
+                limits: dbPlan ? dbPlan.limits : { maxItems: 200, maxSales: 200, maxExpenses: 200, maxAiTokensPerCycle: 50000 }
             },
             { upsert: true }
         );

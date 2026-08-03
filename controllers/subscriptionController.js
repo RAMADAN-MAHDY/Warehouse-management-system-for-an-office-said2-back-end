@@ -32,7 +32,7 @@ exports.getSubscriptionStatus = async (req, res) => {
                 status: 'active',
                 startDate: new Date(),
                 endDate,
-                limits: freePlan ? freePlan.limits : { maxItems: 200, maxSales: 200, maxExpenses: 200 }
+                limits: freePlan ? freePlan.limits : { maxItems: 200, maxSales: 200, maxExpenses: 200, maxAiTokensPerCycle: 50000 }
             });
         }
 

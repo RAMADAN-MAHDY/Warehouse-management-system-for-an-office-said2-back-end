@@ -28,7 +28,8 @@ const planSchema = new mongoose.Schema({
     limits: {
         maxItems: { type: Number, required: true },
         maxSales: { type: Number, required: true },
-        maxExpenses: { type: Number, required: true }
+        maxExpenses: { type: Number, required: true },
+        maxAiTokensPerCycle: { type: Number, required: true }
     },
     features: [String],
     isPublic: {
