@@ -532,7 +532,7 @@ exports.getUserUsageStats = async (req, res) => {
         try {
             const aiBackendUrl = process.env.AI_BACKEND_URL || 'https://makhzangy-ai.vercel.app';
             const authHeader = req.headers.authorization;
-            const response = await axios.get(`${aiBackendUrl}/api/ai/admin/usage/${customerId}`, {
+            const response = await axios.get(`${aiBackendUrl}/api/ai/admin/usage/${customerId}?userId=${user._id}&customerId=${customerId}`, {
                 headers: { Authorization: authHeader },
                 timeout: 5000
             });
