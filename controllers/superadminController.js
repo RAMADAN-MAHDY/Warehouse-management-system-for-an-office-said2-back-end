@@ -135,7 +135,14 @@ const mongoose = require('mongoose');
 // --- إدارة المستخدمين ---
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.find({ role: { $ne: 'superadmin' } }).sort({ createdAt: -1 }).lean();
+        const isOwner = req.user && req.user.role === 'owner';
+        // إذا كان المُنَفِّذ مالك (owner)، يتم عرض جميع الحسابات بما فيها superadmin (ما عدا نفس حساب المالك)
+        // أما إذا كان superadmin عادي، يتم عرض المستخدمين بدون حسابات superadmin أو owner
+        const query = isOwner 
+            ? { _id: { $ne: req.user._id } }
+            : { role: { $nin: ['superadmin', 'owner'] } };
+
+        const users = await User.find(query).sort({ createdAt: -1 }).lean();
         
         // جلب تفاصيل الاشتراك لكل مستخدم
         const usersWithSubscriptions = await Promise.all(users.map(async (user) => {
@@ -155,13 +162,26 @@ exports.getAllUsers = async (req, res) => {
 exports.updateUserStatus = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { isBanned, role, reason } = req.body; // إضافة reason لسجل التدقيق
+        const { isBanned, role, reason } = req.body;
 
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ status: false, message: 'المستخدم غير موجود' });
-        if (user.role === 'superadmin') return res.status(403).json({ status: false, message: 'لا يمكن تعديل بيانات سوبر أدمن آخر' });
+
+        const isRequesterOwner = req.user && req.user.role === 'owner';
+        const isTargetSuperAdminOrOwner = user.role === 'superadmin' || user.role === 'owner';
+        const isPromotingToSuperAdminOrOwner = role === 'superadmin' || role === 'owner';
+
+        // فقط الـ Owner يملك صلاحية تغيير صلاحيات/بيانات سوبر أدمن أو المالك، أو الترقية إليها
+        if ((isTargetSuperAdminOrOwner || isPromotingToSuperAdminOrOwner) && !isRequesterOwner) {
+            return res.status(403).json({ 
+                status: false, 
+                message: 'تعديل صلاحيات أو بيانات المالك والسوبر أدمن متاح فقط لحساب المالك (Owner)' 
+            });
+        }
 
         const oldStatus = user.isBanned;
+        const oldRole = user.role;
+
         if (isBanned !== undefined) user.isBanned = isBanned;
         if (role) user.role = role;
 
@@ -169,17 +189,21 @@ exports.updateUserStatus = async (req, res) => {
 
         // تسجيل العملية في AuditLog
         await AuditLog.create({
-            action: isBanned !== oldStatus ? (isBanned ? 'BAN_USER' : 'UNBAN_USER') : 'UPDATE_USER_ROLE',
+            action: isBanned !== oldStatus 
+                ? (isBanned ? 'BAN_USER' : 'UNBAN_USER') 
+                : (role && role !== oldRole ? 'UPDATE_USER_ROLE' : 'UPDATE_USER_STATUS'),
             customerId: user.customerId,
             details: { 
-                reason: reason || 'تحديث حالة المستخدم من قبل السوبر أدمن',
+                reason: reason || 'تحديث بيانات/صلاحيات المستخدم من لوحة التحكم',
                 performedBy: req.user.username,
+                oldRole,
+                newRole: user.role,
                 userId: user._id
             },
             ipAddress: req.ip
         });
 
-        res.json({ status: true, message: 'تم تحديث بيانات المستخدم بنجاح', data: user });
+        res.json({ status: true, message: 'تم تحديث بيانات المستخدم وصلاحياته بنجاح', data: user });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
     }

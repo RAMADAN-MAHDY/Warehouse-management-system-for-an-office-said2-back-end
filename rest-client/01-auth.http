@@ -23,6 +23,20 @@ Content-Type: application/json
 }
 
 ###
+### 👑 TEST 1.1: تسجيل مالك النظام الرئيسية (Owner)
+### الرد المتوقع: { status: true, data: { user: { role: "owner" ... } } }
+# @name registerOwner
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "ownerramadan",
+  "password": "01552699599",
+  "companyName": "مالك النظام الرئيسي (RAMADAN)",
+  "role": "owner"
+}
+
+###
 ### ✅ TEST 2: تسجيل مستخدم ثانٍ (tenant2) للتحقق من العزل
 ### الرد المتوقع: customerId مختلف عن tenant1
 # @name register2
