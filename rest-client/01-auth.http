@@ -7,6 +7,7 @@
 ###  3. انسخ التوكن من الرد وضعه في @token
 ### ======================================================
 
+# @baseUrl = http://localhost:5000
 @baseUrl = https://warehouse-management-system-for-an.vercel.app
 
 ### ✅ TEST 1: تسجيل مستخدم جديد (tenant1)
@@ -30,8 +31,8 @@ POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
 
 {
-  "username": "ownerramadan",
-  "password": "01552699599",
+  "username": "ownerramadan2",
+  "password": "01556299599rR@",
   "companyName": "مالك النظام الرئيسي (RAMADAN)",
   "role": "owner"
 }
