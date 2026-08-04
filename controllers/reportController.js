@@ -6,6 +6,13 @@ const Expense = require('../models/Expense');
 const StockMovement = require('../models/StockMovement');
 const PurchaseInvoice = require('../models/PurchaseInvoice');
 const Client = require('../models/Client');
+const Supplier = require('../models/Supplier');
+
+const parsePositiveInt = (value, defaultValue, maxValue) => {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return defaultValue;
+    return Math.min(maxValue, Math.max(1, parsed));
+};
 
 /**
  * ملخص شامل للعميل الحالي
@@ -100,6 +107,187 @@ exports.getSummary = async (req, res) => {
                     balance: topDebtorClient.balance
                 } : null,
                 recentSales
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: false, message: error.message });
+    }
+};
+
+/**
+ * ملخص خفيف ومخصص لاستهلاك الـ AI
+ * GET /api/reports/ai-overview
+ */
+exports.getAiOverview = async (req, res) => {
+    try {
+        const cid = req.customerId;
+        const topClientsLimit = parsePositiveInt(req.query.topClientsLimit, 10, 50);
+        const topSuppliersLimit = parsePositiveInt(req.query.topSuppliersLimit, 10, 50);
+        const recentSalesLimit = parsePositiveInt(req.query.recentSalesLimit, 20, 50);
+        const recentPurchaseInvoicesLimit = parsePositiveInt(req.query.recentPurchaseInvoicesLimit, 20, 50);
+
+        const [activeClientsCount, suppliersCount, salesAgg, purchaseAgg, topClientDebts, topSupplierDebts, recentSales, recentPurchaseInvoices] = await Promise.all([
+            Client.countDocuments({ customerId: cid, isActive: true }),
+            Supplier.countDocuments({ customerId: cid }),
+            SaleInvoice.aggregate([
+                { $match: { customerId: cid } },
+                {
+                    $project: {
+                        total: 1,
+                        paymentStatus: 1,
+                        remainingAmount: { $subtract: ['$total', { $ifNull: ['$paidAmount', 0] }] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalSales: { $sum: '$total' },
+                        salesInvoicesCount: { $sum: 1 },
+                        openSalesInvoicesCount: {
+                            $sum: {
+                                $cond: [{ $in: ['$paymentStatus', ['unpaid', 'partial']] }, 1, 0]
+                            }
+                        },
+                        openSalesInvoicesAmount: {
+                            $sum: {
+                                $cond: [{ $in: ['$paymentStatus', ['unpaid', 'partial']] }, '$remainingAmount', 0]
+                            }
+                        }
+                    }
+                }
+            ]),
+            PurchaseInvoice.aggregate([
+                { $match: { customerId: cid, status: 'posted' } },
+                {
+                    $project: {
+                        grandTotal: 1,
+                        paymentStatus: 1,
+                        remainingAmount: { $subtract: ['$grandTotal', { $ifNull: ['$paidAmount', 0] }] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalPurchases: { $sum: '$grandTotal' },
+                        purchaseInvoicesCount: { $sum: 1 },
+                        openPurchaseInvoicesCount: {
+                            $sum: {
+                                $cond: [{ $in: ['$paymentStatus', ['unpaid', 'partial']] }, 1, 0]
+                            }
+                        },
+                        openPurchaseInvoicesAmount: {
+                            $sum: {
+                                $cond: [{ $in: ['$paymentStatus', ['unpaid', 'partial']] }, '$remainingAmount', 0]
+                            }
+                        }
+                    }
+                }
+            ]),
+            Client.find({
+                customerId: cid,
+                isActive: true,
+                balance: { $gt: 0 }
+            })
+                .sort({ balance: -1 })
+                .limit(topClientsLimit)
+                .select('name code balance phone')
+                .lean(),
+            Supplier.find({
+                customerId: cid,
+                balance: { $gt: 0 }
+            })
+                .sort({ balance: -1 })
+                .limit(topSuppliersLimit)
+                .select('name balance phone')
+                .lean(),
+            SaleInvoice.find({ customerId: cid })
+                .sort({ createdAt: -1 })
+                .limit(recentSalesLimit)
+                .select('_id invoiceGroupId clientName clientId total paidAmount paymentStatus createdAt')
+                .populate('clientId', 'name code')
+                .lean(),
+            PurchaseInvoice.find({ customerId: cid, status: 'posted' })
+                .sort({ date: -1, createdAt: -1 })
+                .limit(recentPurchaseInvoicesLimit)
+                .select('_id invoiceNumber supplierId grandTotal paidAmount paymentStatus date createdAt')
+                .populate('supplierId', 'name')
+                .lean()
+        ]);
+
+        const salesSummary = salesAgg[0] || {
+            totalSales: 0,
+            salesInvoicesCount: 0,
+            openSalesInvoicesCount: 0,
+            openSalesInvoicesAmount: 0
+        };
+        const purchaseSummary = purchaseAgg[0] || {
+            totalPurchases: 0,
+            purchaseInvoicesCount: 0,
+            openPurchaseInvoicesCount: 0,
+            openPurchaseInvoicesAmount: 0
+        };
+
+        res.json({
+            status: true,
+            data: {
+                customerId: cid,
+                companyName: req.user?.companyName || '',
+                generatedAt: new Date().toISOString(),
+                counts: {
+                    activeClients: activeClientsCount,
+                    suppliers: suppliersCount,
+                    salesInvoices: salesSummary.salesInvoicesCount,
+                    purchaseInvoices: purchaseSummary.purchaseInvoicesCount
+                },
+                financials: {
+                    totalSales: salesSummary.totalSales,
+                    totalPurchases: purchaseSummary.totalPurchases,
+                    openSalesInvoicesCount: salesSummary.openSalesInvoicesCount,
+                    openSalesInvoicesAmount: salesSummary.openSalesInvoicesAmount,
+                    openPurchaseInvoicesCount: purchaseSummary.openPurchaseInvoicesCount,
+                    openPurchaseInvoicesAmount: purchaseSummary.openPurchaseInvoicesAmount
+                },
+                topClientDebts: topClientDebts.map((client) => ({
+                    id: client._id,
+                    name: client.name,
+                    code: client.code,
+                    phone: client.phone || null,
+                    balance: client.balance
+                })),
+                topSupplierDebts: topSupplierDebts.map((supplier) => ({
+                    id: supplier._id,
+                    name: supplier.name,
+                    phone: supplier.phone || null,
+                    balance: supplier.balance
+                })),
+                recentSalesInvoices: recentSales.map((invoice) => ({
+                    id: invoice._id,
+                    invoiceNumber: invoice.invoiceGroupId || invoice._id,
+                    clientName: invoice.clientName || invoice.clientId?.name || 'عميل غير محدد',
+                    clientCode: invoice.clientId?.code || null,
+                    total: invoice.total,
+                    paidAmount: invoice.paidAmount || 0,
+                    remainingAmount: Math.max((invoice.total || 0) - (invoice.paidAmount || 0), 0),
+                    paymentStatus: invoice.paymentStatus,
+                    date: invoice.createdAt
+                })),
+                recentPurchaseInvoices: recentPurchaseInvoices.map((invoice) => ({
+                    id: invoice._id,
+                    invoiceNumber: invoice.invoiceNumber,
+                    supplierName: invoice.supplierId?.name || 'مورد غير محدد',
+                    total: invoice.grandTotal,
+                    paidAmount: invoice.paidAmount || 0,
+                    remainingAmount: Math.max((invoice.grandTotal || 0) - (invoice.paidAmount || 0), 0),
+                    paymentStatus: invoice.paymentStatus,
+                    date: invoice.date || invoice.createdAt
+                })),
+                limits: {
+                    topClients: topClientsLimit,
+                    topSuppliers: topSuppliersLimit,
+                    recentSales: recentSalesLimit,
+                    recentPurchaseInvoices: recentPurchaseInvoicesLimit
+                }
             }
         });
     } catch (error) {
