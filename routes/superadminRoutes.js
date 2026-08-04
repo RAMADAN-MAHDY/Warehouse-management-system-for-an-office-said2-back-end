@@ -18,7 +18,8 @@ const {
     deleteAuditLogs,
     exportUsersExcel,
     exportTransactionsExcel,
-    updateUserSubscription
+    updateUserSubscription,
+    getUserUsageStats
 } = require('../controllers/superadminController');
 
 // حماية جميع المسارات بالسوبر أدمن
@@ -33,6 +34,7 @@ router.get('/transactions/export', exportTransactionsExcel);
 
 // المستخدمين والاشتراكات
 router.get('/users', getAllUsers);
+router.get('/users/:userId/usage', getUserUsageStats);
 router.put('/users/:userId', updateUserStatus);
 router.delete('/users/:userId', deleteUserPermanently);
 router.put('/users/:userId/subscription', updateUserSubscription);

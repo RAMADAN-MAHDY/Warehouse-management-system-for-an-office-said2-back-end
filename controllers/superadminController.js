@@ -7,6 +7,9 @@ const Item = require('../models/Item');
 const SaleInvoice = require('../models/SaleInvoice');
 const Purchase = require('../models/Purchase');
 const Expense = require('../models/Expense');
+const Supplier = require('../models/Supplier');
+const Client = require('../models/Client');
+const axios = require('axios');
 
 const exportExcel = require('../utils/exportExcel');
 const { createNotification } = require('./notificationController');
@@ -491,5 +494,75 @@ exports.deleteAuditLogs = async (req, res) => {
         res.json({ status: true, message: 'تم حذف سجلات التدقيق بنجاح' });
     } catch (error) {
         res.status(500).json({ status: false, message: error.message });
+    }
+};
+
+exports.getUserUsageStats = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ status: false, message: 'المستخدم غير موجود' });
+        }
+
+        const customerId = user.customerId;
+
+        // 1. حساب إحصائيات الموارد المخزنية للنظام الرئيسي
+        const [itemsCount, salesCount, suppliersCount, clientsCount] = await Promise.all([
+            Item.countDocuments({ customerId }),
+            SaleInvoice.countDocuments({ customerId }),
+            Supplier.countDocuments({ customerId }),
+            Client.countDocuments({ customerId })
+        ]);
+
+        // 2. جلب إحصائيات الذكاء الاصطناعي من سيرفر الـ AI
+        let aiUsage = {
+            totalTokens: 0,
+            promptTokens: 0,
+            completionTokens: 0,
+            requests: {
+                minute: 0,
+                hour: 0,
+                day: 0,
+                week: 0,
+                month: 0
+            }
+        };
+
+        try {
+            const aiBackendUrl = process.env.AI_BACKEND_URL || 'https://makhzangy-ai.vercel.app';
+            const authHeader = req.headers.authorization;
+            const response = await axios.get(`${aiBackendUrl}/api/ai/admin/usage/${customerId}`, {
+                headers: { Authorization: authHeader },
+                timeout: 5000
+            });
+            if (response.data?.success && response.data?.data) {
+                aiUsage = response.data.data;
+            }
+        } catch (aiErr) {
+            console.error('Failed to fetch AI usage details from AI backend:', aiErr.message);
+        }
+
+        return res.json({
+            status: true,
+            data: {
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    companyName: user.companyName,
+                    customerId: user.customerId,
+                    createdAt: user.createdAt
+                },
+                resources: {
+                    itemsCount,
+                    salesCount,
+                    suppliersCount,
+                    clientsCount
+                },
+                aiUsage
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message });
     }
 };
