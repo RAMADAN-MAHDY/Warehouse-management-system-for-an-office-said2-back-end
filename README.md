@@ -67,3 +67,13 @@
 
 ---
 *تم تطوير هذا النظام ليوفر أقصى درجات الدقة والسهولة في إدارة الأعمال التجارية.*
+
+---
+
+## English Summary
+
+The backend API for the warehouse and invoicing SaaS: **Node.js, Express and MongoDB** with a **multi-tenant** architecture.
+
+**What it provides:** full product and stock CRUD with automatic quantity tracking and low-stock alerts, sales/purchase invoicing, expense tracking, profit/loss dashboard reports, subscription plans (trial/basic/pro) with manual payment confirmation (Vodafone Cash, InstaPay), and SuperAdmin tools for monitoring tenants and approving payments. Security-first: Helmet, rate limiting, HPP protection, Sentry monitoring, JWT auth and per-tenant data isolation. Deployed as serverless functions on Vercel (`vercel.json` included).
+
+**Run:** `npm install` then `npm run dev`.
