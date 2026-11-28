@@ -4,8 +4,8 @@
   "main": "api/server.js",
   "scripts": {
     "test": "jest",
-    "dev": "node init && nodemon api/server.js",
-    "build": "node init && echo 'Build completed'"
+    "dev": "nodemon api/server.js",
+    "build": "echo 'Build completed'"
   },
   "keywords": [],
   "author": "",
